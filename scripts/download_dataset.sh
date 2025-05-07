@@ -40,5 +40,4 @@ echo "Extracting MS COCO 2014 dataset..."
 unzip -q "${COCO_DIR}/train2014.zip" -d "${COCO_DIR}"
 unzip -q "${COCO_DIR}/val2014.zip" -d "${COCO_DIR}"
 
-echo "${COCO_DIR}/train2014" >"${ROOT_DIR}/datasets/coco/coco.txt"
-echo "${COCO_DIR}/val2014" >>"${ROOT_DIR}/datasets/coco/coco.txt"
+echo "${COCO_DIR}" >"${ROOT_DIR}/datasets/coco/coco.txt"
