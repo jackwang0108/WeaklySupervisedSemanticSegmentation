@@ -23,7 +23,7 @@ wget -c -q --show-progress --no-check-certificate \
 echo "Extracting augmented annotations..."
 unzip -q "${VOC_DIR}/SegmentationClassAug.zip" -d "${VOC_DIR}/VOCdevkit/VOC2012/"
 
-echo "${VOC_DIR}/VOCdevkit/VOC2012" >"${ROOT_DIR}/datasets/voc/voc2012.txt"
+echo "${VOC_DIR}/VOCdevkit/VOC2012" >"${ROOT_DIR}/datasets/voc/voc.txt"
 
 # MS COCO 2014
 echo "Downloading MS COCO 2014 dataset..."
@@ -40,5 +40,5 @@ echo "Extracting MS COCO 2014 dataset..."
 unzip -q "${COCO_DIR}/train2014.zip" -d "${COCO_DIR}"
 unzip -q "${COCO_DIR}/val2014.zip" -d "${COCO_DIR}"
 
-echo "${COCO_DIR}/train2014" >"${ROOT_DIR}/datasets/coco/coco2014.txt"
-echo "${COCO_DIR}/val2014" >>"${ROOT_DIR}/datasets/coco/coco2014.txt"
+echo "${COCO_DIR}/train2014" >"${ROOT_DIR}/datasets/coco/coco.txt"
+echo "${COCO_DIR}/val2014" >>"${ROOT_DIR}/datasets/coco/coco.txt"
