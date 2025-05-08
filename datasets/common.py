@@ -92,11 +92,6 @@ def load_label_dict(which_dataset: DatasetName) -> dict[str, np.ndarray[int]]:
     return loaded.item()
 
 
-def to_onehot(label: torch.Tensor, num_classes: int) -> torch.Tensor:
-
-    pass
-
-
 if __name__ == "__main__":
     # Example usage
     image_name_list = load_image_list("voc", "train_aug")
