@@ -1,5 +1,7 @@
 data
 test.py
+datasets/voc/voc.txt
+datasets/coco/coco.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
