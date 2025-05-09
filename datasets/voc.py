@@ -16,13 +16,10 @@ from collections.abc import Callable
 
 # Third-Party Library
 import numpy as np
-import imageio.v3 as iio
 import PIL.Image as Image
 
 # Torch Library
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import Dataset
 
 # My Library
@@ -110,7 +107,38 @@ if __name__ == "__main__":
     ds = VOC2012WSSSDataset(split="train_aug")
 
     loader = DataLoader(ds, 32, True, num_workers=1)
-
     images, labels, weak_labels = next(iter(loader))
-
     print(images.shape, labels.shape, weak_labels.shape)
+
+    from datasets.voc import VOC2012Dataset
+    from datasets.transforms import (
+        Compose,
+        ToTensor,
+        ToPILImage,
+        RandomResizedCrop,
+        RandomHorizontalFlip,
+        RandomVerticalFlip,
+        RandomRotation,
+    )
+
+    transform = Compose(
+        [
+            ToTensor(),
+            RandomResizedCrop(size=256),
+            RandomHorizontalFlip(p=0.5),
+            RandomVerticalFlip(p=0.5),
+            RandomRotation(degrees=30, expand=True),
+        ]
+    )
+
+    x = ds[0]
+    print(x[0].shape, x[1].shape)
+    ToPILImage(mode="RGB")(x[0]).show()
+    ToPILImage(mode="L")(x[1]).show()
+
+    image, mask = transform(x)
+    print(image.shape, mask.shape)
+    print(mask.unique())
+
+    ToPILImage("RGB")(image).show()
+    ToPILImage(mode="L")(mask).show()
