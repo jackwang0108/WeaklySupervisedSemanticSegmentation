@@ -58,7 +58,7 @@ class VOC2012Dataset(Dataset):
     def __len__(self) -> int:
         return len(self.image_name_list)
 
-    def __getitem__(self, index: int) -> tuple[np.ndarray, np.ndarray]:
+    def __getitem__(self, index: int) -> tuple[str, np.ndarray, np.ndarray]:
         image_name = self.image_name_list[index]
         image_path = self.root / "JPEGImages" / f"{image_name}.jpg"
         label_path = self.root / "SegmentationClassAug" / f"{image_name}.png"
@@ -94,7 +94,15 @@ class VOC2012WSSSDataset(VOC2012Dataset):
             one_hot[image_classes - 1] = 1
         return one_hot
 
-    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(
+        self, index: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Note:
+            语义分割的label, 即segmentation mask, 是一个二维的Tensor. 其中的0表示背景类, 物体类的label是从1开始的
+
+            但是弱监督标签, 即图像级的物体类别one-hot向量, 是label转的一维的Tensor. 物体类的label直接从0开始
+        """
         name, image, label = super().__getitem__(index)
         image, label = self.transform((image, label))
 
@@ -104,41 +112,8 @@ class VOC2012WSSSDataset(VOC2012Dataset):
 if __name__ == "__main__":
     from torch.utils.data import DataLoader
 
-    ds = VOC2012WSSSDataset(split="train_aug")
+    ds = VOC2012WSSSDataset(split="val")
 
     loader = DataLoader(ds, 32, True, num_workers=1)
     images, labels, weak_labels = next(iter(loader))
     print(images.shape, labels.shape, weak_labels.shape)
-
-    from datasets.voc import VOC2012Dataset
-    from datasets.transforms import (
-        Compose,
-        ToTensor,
-        ToPILImage,
-        RandomResizedCrop,
-        RandomHorizontalFlip,
-        RandomVerticalFlip,
-        RandomRotation,
-    )
-
-    transform = Compose(
-        [
-            ToTensor(),
-            RandomResizedCrop(size=256),
-            RandomHorizontalFlip(p=0.5),
-            RandomVerticalFlip(p=0.5),
-            RandomRotation(degrees=30, expand=True),
-        ]
-    )
-
-    x = ds[0]
-    print(x[0].shape, x[1].shape)
-    ToPILImage(mode="RGB")(x[0]).show()
-    ToPILImage(mode="L")(x[1]).show()
-
-    image, mask = transform(x)
-    print(image.shape, mask.shape)
-    print(mask.unique())
-
-    ToPILImage("RGB")(image).show()
-    ToPILImage(mode="L")(mask).show()
