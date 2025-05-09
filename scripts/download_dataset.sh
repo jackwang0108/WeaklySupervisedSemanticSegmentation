@@ -35,9 +35,13 @@ wget -c -q --show-progress --no-check-certificate \
 wget -c -q --show-progress --no-check-certificate \
     -O "${COCO_DIR}/val2014.zip" \
     "http://images.cocodataset.org/zips/val2014.zip"
+wget -c -q --show-progress --no-check-certificate \
+    -O "${COCO_DIR}/annotations_trainval2014.zip" \
+    "http://images.cocodataset.org/annotations/annotations_trainval2014.zip"
 
 echo "Extracting MS COCO 2014 dataset..."
 unzip -q "${COCO_DIR}/train2014.zip" -d "${COCO_DIR}"
 unzip -q "${COCO_DIR}/val2014.zip" -d "${COCO_DIR}"
+unzip -q "${COCO_DIR}/annotations_trainval2014.zip" -d "${COCO_DIR}"
 
 echo "${COCO_DIR}" >"${ROOT_DIR}/datasets/coco/coco.txt"
