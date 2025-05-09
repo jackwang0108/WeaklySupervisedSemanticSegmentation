@@ -31,6 +31,7 @@ import torchvision.transforms.functional as F
 
 __all__ = (
     "Compose",
+    "ToDtype",
     "ToTensor",
     "ToPILImage",
     "Resize",
@@ -56,6 +57,17 @@ class Compose:
         for t in self.transforms:
             x = t(x)
         return x
+
+
+class ToDtype:
+    def __init__(self, dtype: torch.dtype | np.dtype):
+        self.dtype = dtype
+
+    def __call__(self, x: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
+        converter = lambda x: (
+            x.astype(self.dtype) if isinstance(x, np.ndarray) else x.to(self.dtype)
+        )
+        return apply_all(x, converter)
 
 
 class ToTensor:
@@ -334,3 +346,40 @@ class ColorJitter:
 
     def __repr__(self):
         return self.color_jitter.__repr__()
+
+
+if __name__ == "__main__":
+    from .voc import VOC2012WSSSDataset
+    from .coco import COCO2014WSSSDataset
+
+    transforms = Compose(
+        [
+            ToTensor(),
+            RandomResizedCrop(size=256),
+            RandomHorizontalFlip(p=0.5),
+            RandomVerticalFlip(p=0.5),
+            RandomRotation(degrees=30, expand=True),
+        ]
+    )
+
+    rgb_visualizer = ToPILImage("RGB")
+    mask_visualizer = Compose(
+        [
+            ToDtype(torch.uint8),
+            ToPILImage(mode="L"),
+        ]
+    )
+
+    voc_ds = VOC2012WSSSDataset(split="train_aug", transform=transforms)
+    coco_ds = COCO2014WSSSDataset(split="train", transform=transforms)
+
+    print(len(voc_ds), len(coco_ds))
+
+    voc_image, voc_mask, _ = voc_ds[0]
+    coco_image, coco_mask, _ = coco_ds[0]
+
+    rgb_visualizer(voc_image).show()
+    mask_visualizer(voc_mask).show()
+
+    rgb_visualizer(coco_image).show()
+    mask_visualizer(coco_mask).show()
