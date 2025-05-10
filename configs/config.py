@@ -24,23 +24,23 @@ def load_base_config() -> DictConfig:
     return OmegaConf.load(Path(__file__).resolve().parent / "base.yaml")
 
 
-def load_config(config_path: Path) -> DictConfig:
-    """load_config() 加载指定算法配置文件 (覆盖基础配置文件)"""
+def load_algo_config(config_path: Path) -> DictConfig:
+    """load_algo_config() 加载指定算法配置文件 (覆盖基础配置文件)"""
     base_config = load_base_config()
-    user_config = OmegaConf.load(config_path)
-    return OmegaConf.merge(base_config, user_config)
+    algo_config = OmegaConf.load(config_path)
+    return OmegaConf.merge(base_config, algo_config)
 
 
-def get_config(config_path: Path, args_list: list[str]) -> DictConfig:
-    """get_config() 获取配置文件, 并合并命令行参数"""
+def build_config(config_path: Path, cmd_args: list[str]) -> DictConfig:
+    """build_config() 从配置文件和命令行参数中构建得到训练配置"""
     if not config_path.exists():
         raise FileNotFoundError(f"Config file {config_path} does not exist.")
-    cli_config = OmegaConf.from_cli(args_list)
-    file_config = load_config(config_path)
+    cli_config = OmegaConf.from_cli(cmd_args)
+    file_config = load_algo_config(config_path)
     return OmegaConf.merge(file_config, cli_config)
 
 
 if __name__ == "__main__":
     root = Path(__file__).resolve().parent
-    config = get_config(root / "./excel.yaml", [])
+    config = build_config(root / "./excel.yaml", [])
     print(config)

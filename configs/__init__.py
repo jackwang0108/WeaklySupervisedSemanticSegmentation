@@ -15,3 +15,15 @@ __init__.py 对configs模块进行初始化
 # Torch Library
 
 # My Library
+from .config import (
+    build_config,
+    load_algo_config,
+    load_base_config,
+)
+
+
+__all__ = [
+    "build_config",
+    "load_algo_config",
+    "load_base_config",
+]
