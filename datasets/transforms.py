@@ -55,6 +55,10 @@ class Transform(ABC):
     def __call__(self, x: Any) -> Any:
         pass
 
+    @abstractmethod
+    def __repr__(self) -> str:
+        pass
+
 
 class Compose(Transform):
     def __init__(self, transforms: Sequence[Callable]):
@@ -67,6 +71,13 @@ class Compose(Transform):
             x = t(x)
         return x
 
+    def __repr__(self) -> str:
+        format_string = f"{self.__class__.__name__}("
+        for t in self.transforms:
+            format_string += f"\n    {t},"
+        format_string += "\n)"
+        return format_string
+
 
 class ToDtype(Transform):
     def __init__(self, dtype: torch.dtype | np.dtype):
@@ -77,6 +88,9 @@ class ToDtype(Transform):
             x.astype(self.dtype) if isinstance(x, np.ndarray) else x.to(self.dtype)
         )
         return apply_all(x, converter)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(dtype={self.dtype})"
 
 
 class ToTensor(Transform):
@@ -92,6 +106,9 @@ class ToTensor(Transform):
         image = F.to_tensor(x[0]) * (1 if self.div else 255)
         mask = torch.from_numpy(x[1]).long().unsqueeze(dim=0)
         return (image, mask)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(div={self.div})"
 
 
 # fmt: off
@@ -110,6 +127,9 @@ class ToPILImage(Transform):
         self, x: np.ndarray | torch.Tensor | Sequence[np.ndarray | torch.Tensor]
     ) -> Image.Image | Sequence[Image.Image]:
         return apply_all(x, partial(F.to_pil_image, mode=self.mode))
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(mode={self.mode})"
 
 
 class Resize(Transform):
