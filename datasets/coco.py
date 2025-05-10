@@ -113,6 +113,19 @@ class COCO2014WSSSDataset(COCO2014Dataset):
             transform if transform is not None else Compose([ToTensor(), Resize(256)])
         )
 
+    def __repr__(self):
+        format_string = f"{self.__class__.__name__}("
+        format_string += f"\n    root={self.root},"
+        format_string += f"\n    split={self.split},"
+        format_string += f"\n    length={len(self)},"
+        format_string += f"\n    transform="
+
+        for line in repr(self.transform).splitlines():
+            format_string += f"\n        {line}"
+
+        format_string += "\n)"
+        return format_string
+
     def get_weakly_supervision_label(self, semantic_mask: torch.Tensor) -> torch.Tensor:
         """获得弱监督标签, 这里的弱监督标签是图像级的物体类别one-hot向量"""
         image_classes = semantic_mask.unique()
