@@ -12,27 +12,34 @@ train.py 用于训练指定的模型和算法
 from pathlib import Path
 
 # Third-Party Library
+from omegaconf import DictConfig
 
 # Torch Library
 
 # My Library
 from core import Trainer
-from configs.config import get_config
+from configs.config import build_config
 from algorithms import get_algorithm
 from algorithms.base import (
     WeaklySupervisedSemanticSegmentationAlgorithm as WSSSAlgorithm,
 )
 
 from .args import get_args
+from .helper import set_random_seed
+
+
+def get_config() -> DictConfig:
+    args, options = get_args()
+    config = build_config(args.config, options)
+    return config
 
 
 def main():
-    args, options = get_args()
-    config = get_config(args.config, options)
-
+    config = get_config()
+    set_random_seed(config.train.seed)
     algorithm: WSSSAlgorithm = get_algorithm(config.model.name)(config)
 
-    Trainer(algorithm=algorithm, config=config).run()
+    Trainer(algorithm=algorithm, config=config).train()
 
 
 if __name__ == "__main__":
