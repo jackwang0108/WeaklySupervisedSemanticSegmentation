@@ -42,6 +42,7 @@ __all__ = (
     "RandomVerticalFlip",
     "RandomRotation",
     "ColorJitter",
+    "Normalize",
 )
 
 
