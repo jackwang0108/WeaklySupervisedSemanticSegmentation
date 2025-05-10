@@ -16,6 +16,7 @@ torchvision.transforms.v2 虽然可以同步处理图像和mask, 但是不支持
 import math
 import random
 from functools import partial
+from abc import ABC, abstractmethod
 from typing import Any, Optional, Literal
 from collections.abc import Callable, Sequence
 
@@ -30,6 +31,7 @@ import torchvision.transforms.functional as F
 # My Library
 
 __all__ = (
+    "Transform",
     "Compose",
     "ToDtype",
     "ToTensor",
@@ -47,7 +49,13 @@ def apply_all(x: Any | Sequence[Any], func: Callable) -> Any | Sequence[Any]:
     return [func(t) for t in x] if isinstance(x, (list, tuple)) else func(x)
 
 
-class Compose:
+class Transform(ABC):
+    @abstractmethod
+    def __call__(self, x: Any) -> Any:
+        pass
+
+
+class Compose(Transform):
     def __init__(self, transforms: Sequence[Callable]):
         self.transforms = transforms
 
@@ -59,7 +67,7 @@ class Compose:
         return x
 
 
-class ToDtype:
+class ToDtype(Transform):
     def __init__(self, dtype: torch.dtype | np.dtype):
         self.dtype = dtype
 
@@ -70,7 +78,7 @@ class ToDtype:
         return apply_all(x, converter)
 
 
-class ToTensor:
+class ToTensor(Transform):
     def __init__(self, div: bool = True):
         self.div = div
 
@@ -93,7 +101,7 @@ PIL_MODES = Literal[
 # fmt: on
 
 
-class ToPILImage:
+class ToPILImage(Transform):
     def __init__(self, mode: Optional[PIL_MODES] = None):
         self.mode = mode
 
@@ -103,7 +111,7 @@ class ToPILImage:
         return apply_all(x, partial(F.to_pil_image, mode=self.mode))
 
 
-class Resize:
+class Resize(Transform):
     """Resize 图像和mask到指定大小"""
 
     def __init__(self, size: int | tuple[int, int]):
@@ -135,7 +143,7 @@ class Resize:
         return f"{self.__class__.__name__}{detail}"
 
 
-class RandomResizedCrop:
+class RandomResizedCrop(Transform):
     def __init__(
         self,
         size: int | tuple[int, int],
@@ -233,7 +241,7 @@ class RandomResizedCrop:
         return format_string
 
 
-class RandomHorizontalFlip:
+class RandomHorizontalFlip(Transform):
     """随机水平翻转图像和mask"""
 
     def __init__(self, p: float = 0.5):
@@ -248,7 +256,7 @@ class RandomHorizontalFlip:
         return f"{self.__class__.__name__}(p={self.p})"
 
 
-class RandomVerticalFlip:
+class RandomVerticalFlip(Transform):
     """随机垂直翻转图像和mask"""
 
     def __init__(self, p: float = 0.5):
@@ -263,7 +271,7 @@ class RandomVerticalFlip:
         return f"{self.__class__.__name__}(p={self.p})"
 
 
-class RandomRotation:
+class RandomRotation(Transform):
     """随机旋转图像和mask"""
 
     def __init__(
@@ -322,7 +330,7 @@ class RandomRotation:
         return format_string
 
 
-class ColorJitter:
+class ColorJitter(Transform):
     """随机改变图像的亮度、对比度、饱和度和色调"""
 
     from torchvision.transforms import ColorJitter as _ColorJitter
@@ -341,11 +349,31 @@ class ColorJitter:
             hue=hue,
         )
 
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+    def __call__(self, x: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         return self.color_jitter(x[0]), x[1]
 
     def __repr__(self):
         return self.color_jitter.__repr__()
+
+
+class Normalize(Transform):
+    """
+    对图像进行归一化处理
+
+    ToTensor() 调用 torchvision.transforms.functional.to_tensor() 将图像转换为Tensor时, 只是单纯的将像素值从0~255转换为0~1
+
+    因此, 后序需要使用Normalize() 将0~1的像素分布转换为均值为0, 方差为1的分布
+    """
+
+    def __init__(self, mean: Sequence[float], std: Sequence[float]):
+        self.mean = torch.tensor(mean)
+        self.std = torch.tensor(std)
+
+    def __call__(self, x: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        return F.normalize(x[0], self.mean, self.std), x[1]
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(mean={self.mean}, std={self.std})"
 
 
 if __name__ == "__main__":
