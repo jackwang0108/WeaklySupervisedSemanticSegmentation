@@ -14,8 +14,14 @@ from collections.abc import Callable
 
 # Third-Party Library
 
+# Torch Library
+import torch
+
 # My Library
 from .common import load_data_dir, load_image_list
+from .voc import VOC2012WSSSDataset
+from .coco import COCO2014WSSSDataset
+from .transforms import Compose, Resize, ToTensor
 
 
 def print_sep(callable: Callable):
@@ -58,10 +64,53 @@ def check_coco():
     )
 
 
+@print_sep
+def get_mean_std():
+    # 计算数据集均值
+
+    def calculate_mean_std(ds: VOC2012WSSSDataset | COCO2014WSSSDataset):
+
+        count = 0  # 总像素数
+        psum = torch.zeros(3)  # 各通道像素和
+        psum_sq = torch.zeros(3)  # 各通道像素平方和
+        images = []
+        for i in range(len(ds)):
+            # image: [3, H, W]
+            image, _, _ = ds[i]
+            psum += image.sum(dim=(1, 2))
+            psum_sq += (image**2).sum(dim=(1, 2))
+            count += image.shape[1] * image.shape[2]
+
+            print(f"Processed {i}/{len(ds)} images")
+
+        mean = psum / count
+        std = (psum_sq / count - mean**2).sqrt()
+
+        return mean, std
+
+    transform = Compose(
+        [
+            ToTensor(),
+            Resize(size=256),
+        ]
+    )
+
+    mean, std = calculate_mean_std(
+        VOC2012WSSSDataset(split="train_aug", transform=transform)
+    )
+    print(f"VOC2012WSSSDataset mean: {mean}, std: {std}")
+
+    mean, std = calculate_mean_std(
+        COCO2014WSSSDataset(split="train", transform=transform)
+    )
+    print(f"COCO2014WSSSDataset mean: {mean}, std: {std}")
+
+
 def main():
 
     check_voc()
     check_coco()
+    get_mean_std()
 
 
 if __name__ == "__main__":
