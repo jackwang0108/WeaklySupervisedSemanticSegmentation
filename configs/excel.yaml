@@ -1,0 +1,15 @@
+_defaults_:
+    - base.yaml
+
+model:
+    name: "ExCEL"
+    backbone: "resnet101"
+
+train:
+    lr: 0.01
+    stages:
+        - warmup_epochs: 5
+        - main_epochs: 20
+
+loss:
+    weights: [1.0, 0.5]

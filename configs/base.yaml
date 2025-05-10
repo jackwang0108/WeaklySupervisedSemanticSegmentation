@@ -1,0 +1,9 @@
+data:
+    root: "./data"
+    dataset: "voc"
+    img_size: [512, 512]
+
+train:
+    epochs: 50
+    batch_size: 16
+    lr: 0.001
