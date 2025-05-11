@@ -11,6 +11,7 @@ __init__.py 对core模块进行初始化
 # Standard Library
 
 # Third-Party Library
+from rich.traceback import install
 
 # Torch Library
 
@@ -20,3 +21,5 @@ from .trainer import Trainer
 __all__ = [
     "Trainer",
 ]
+
+install(word_wrap=True)

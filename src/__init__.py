@@ -11,7 +11,10 @@ __init__.py 对src模块进行初始化
 # Standard Library
 
 # Third-Party Library
+from rich.traceback import install
 
 # Torch Library
 
 # My Library
+
+install(word_wrap=True)

@@ -12,6 +12,7 @@ __init__.py 用于初始化datasets模块
 from typing import TypeVar, Literal
 
 # Third-Party Library
+from rich.traceback import install
 
 # Torch Library
 
@@ -27,3 +28,5 @@ WSSSDataset = TypeVar(
     VOC2012WSSSDataset,
     COCO2014WSSSDataset,
 )
+
+install(word_wrap=True)

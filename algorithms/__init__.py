@@ -15,11 +15,15 @@ from pathlib import Path
 from typing import Literal, Type
 
 # Third-Party Library
+from rich.traceback import install
 
 # Torch Library
 
 # My Library
 from .base import WeaklySupervisedSemanticSegmentationAlgorithm
+
+
+install(word_wrap=True)
 
 # 注册算法的字典
 ALGORITHMS_REGISTRY: dict[str, Type[WeaklySupervisedSemanticSegmentationAlgorithm]] = {}
