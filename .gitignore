@@ -1,6 +1,7 @@
 data
 logs
 test.py
+test
 datasets/voc/voc.txt
 datasets/coco/coco.txt
 
