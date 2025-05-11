@@ -12,8 +12,10 @@ base.py 定义了算法的抽象基类, 所有算法都需要继承这个类
 from abc import ABC, abstractmethod
 
 # Third-Party Library
+from omegaconf import DictConfig
 
 # Torch Library
+import torch
 import torch.nn as nn
 
 # My Library
@@ -22,17 +24,20 @@ import torch.nn as nn
 class WeaklySupervisedSemanticSegmentationAlgorithm(ABC):
     """弱监督语义分割算法的抽象基类"""
 
+    def __init__(self, config: DictConfig):
+        super().__init__()
+
+        self.config = config
+        self.model = self.build_model()
+
     @abstractmethod
-    def build_model(self, cfg) -> nn.Module:
-        """构建模型"""
-        pass
+    def build_model(self) -> nn.Module:
+        raise NotImplementedError
 
     @abstractmethod
     def train_step(self, data, epoch, step) -> dict:
-        """训练一步"""
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def predict(self, image):
-        """推理接口"""
-        pass
+        raise NotImplementedError

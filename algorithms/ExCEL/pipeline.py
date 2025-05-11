@@ -17,18 +17,15 @@ from omegaconf import DictConfig
 
 # My Library
 from .. import register_algorithm
-from ..base import WeaklySupervisedSemanticSegmentationAlgorithm
+from ..base import WeaklySupervisedSemanticSegmentationAlgorithm as WSSSAlgorithm
 
 from .model import ExCELModel
 
 
 @register_algorithm("ExCEL")
-class ExCEL(WeaklySupervisedSemanticSegmentationAlgorithm):
+class ExCEL(WSSSAlgorithm):
     def __init__(self, config: DictConfig):
-        super().__init__()
-
-        self.config = config
-        self.model = self.build_model()
+        super().__init__(config=config)
 
     def build_model(self) -> ExCELModel:
         print("Building ExCEL model...")
