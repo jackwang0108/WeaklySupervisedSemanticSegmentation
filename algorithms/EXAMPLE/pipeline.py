@@ -43,7 +43,9 @@ class EXAMPLE(WSSSAlgorithm):
         self, data: tuple[torch.Tensor], epoch: int, batch: int
     ) -> dict[str, Any]:
 
-        loss = self.model(data[0]).sum()
+        preds: torch.Tensor = self.model(data[0])
+
+        loss = preds.mean(dim=0).sum().abs()
 
         self.info_dict |= {"epoch": epoch, "batch": batch, "loss": loss}
 
