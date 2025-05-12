@@ -5,9 +5,14 @@
         "Cdevkit",
         "Ctrainval",
         "hflip",
+        "pbars",
+        "psum",
+        "renderable",
         "RGBX",
+        "Richuru",
         "supercategory",
         "trainval",
+        "truecolor",
         "vflip",
         "WSSS"
     ]
