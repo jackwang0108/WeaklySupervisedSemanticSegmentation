@@ -11,6 +11,7 @@ __init__.py 对configs模块进行初始化
 # Standard Library
 
 # Third-Party Library
+from rich.traceback import install
 
 # Torch Library
 
@@ -27,3 +28,6 @@ __all__ = [
     "load_algo_config",
     "load_base_config",
 ]
+
+
+install(word_wrap=True)
