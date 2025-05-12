@@ -37,7 +37,7 @@ def get_config() -> DictConfig:
 def main():
     config = get_config()
     set_random_seed(config.train.seed)
-    algorithm: WSSSAlgorithm = get_algorithm(config.model.name)(config)
+    algorithm: WSSSAlgorithm = get_algorithm(config.algorithm.name)(config)
 
     Trainer(algorithm=algorithm, config=config).train()
 
