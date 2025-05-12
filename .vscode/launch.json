@@ -11,9 +11,10 @@
             "module": "src.train",
             "args": [
                 "-c",
-                "${workspaceFolder}/configs/excel.yaml",
+                "${workspaceFolder}/configs/EXAMPLE.yaml",
                 "train.lr=0.001",
-            ]
+            ],
+            "justMyCode": true
         },
         {
             "name": "Python 调试程序: config 模块",
@@ -26,7 +27,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
         },
         {
             "name": "Python 调试程序: dataset 模块",
