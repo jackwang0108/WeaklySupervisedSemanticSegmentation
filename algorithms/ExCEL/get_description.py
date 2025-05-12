@@ -9,6 +9,7 @@ get_descriptions.py 调用第三方语言模型生成类别描述
 """
 
 # Standard Library
+import json
 from pathlib import Path
 from typing import Literal
 from functools import partial
@@ -22,7 +23,6 @@ from openai.types.chat import ChatCompletion
 # Torch Library
 
 # My Library
-from .classenames import ClassNames
 
 
 # Sec.3.2. Text Semantic Enrichment
@@ -70,16 +70,37 @@ def get_description_generator(
     return get_descriptions
 
 
-def get
+def get_descriptions(
+    dataset: str,
+    class_names: list[str],
+    n: int,
+    which: Literal["gpt4", "deepseek"] = "gpt4",
+) -> list[str]:
+
+    if (
+        description_file := Path(__file__).resolve().parent / "descriptions.json"
+    ).exists():
+        with open(description_file, "r") as f:
+            cached_descriptions: dict[str, dict[str, list[str]]] = json.load(f)
+
+        if dataset in cached_descriptions:
+            return cached_descriptions[dataset]
+    else:
+        cached_descriptions = {}
+
+    get_descriptions = get_description_generator(which)
+    descriptions = {
+        class_name: get_descriptions(class_name, n) for class_name in class_names
+    }
+    cached_descriptions |= {dataset: descriptions}
+    with open(description_file, "w") as f:
+        json.dump(cached_descriptions, f, indent=4)
+
+    return descriptions
 
 
 if __name__ == "__main__":
 
-    get_descriptions = get_description_generator("deepseek")
+    from .classenames import ClassNames
 
-    descriptions = get_descriptions(
-        class_name="cat",
-        n=20,
-    )
-
-    print(descriptions)
+    print(get_descriptions("coco", ClassNames.coco, 20, "deepseek"))
