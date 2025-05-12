@@ -1,9 +1,89 @@
+algorithm:
+    name: "???"
+
+    num_classes: "???"
+
+    # optimizer设置
+    optimizer:
+        name: "???"
+        params:
+            lr: 0.001
+
+    # scheduler设置
+    scheduler:
+        name: "???"
+        params:
+            last_epoch: -1
+
 data:
     root: "./data"
     dataset: "voc"
-    img_size: [512, 512]
+    dataset_using: "???"
+    available_datasets:
+        - "voc"
+        - "coco"
+    dtype: "float32"
+    # 计算出来的数据集的均值和标准差
+    # 参考 datasets/statistics.py
+    dataset_statistics:
+        voc:
+            mean: [0.4573, 0.4373, 0.4045]
+            std: [0.2675, 0.2643, 0.2780]
+        coco:
+            mean: [0.4712, 0.4474, 0.4077]
+            std: [0.2700, 0.2655, 0.2808]
+
+val:
+    # dataloader设置
+    dataloader:
+        shuffle: false
+        num_workers: 4
+        batch_size: 32
+        pin_memory: true
+    # 数据增强设置
+    transform:
+        - name: "ToTensor"
+        - name: "Resize"
+          params:
+              size: [256, 256]
+        - name: "Normalize"
+          params:
+              mean: [0.4573, 0.4373, 0.4045]
+              std: [0.2675, 0.2643, 0.2780]
+
+# checkpoint设置
+checkpoint:
+    save_every: 10
+    load_file: null
+    save_checkpoint: true
+    with_weight_normalization: "???"
 
 train:
-    epochs: 50
-    batch_size: 16
-    lr: 0.001
+    seed: 1024
+    epochs: 200
+    log_interval: 100
+    # dataloader设置
+    dataloader:
+        shuffle: true
+        num_workers: 4
+        batch_size: 32
+        pin_memory: true
+    # 数据增强设置
+    transform:
+        - name: "ToTensor"
+        - name: "Resize"
+          params:
+              size: [256, 256]
+        - name: "RandomHorizontalFlip"
+          params:
+              p: 0.5
+        - name: "ColorJitter"
+          params:
+              brightness: 0.2
+              contrast: 0.2
+              saturation: 0.2
+              hue: 0.1
+        - name: "Normalize"
+          params:
+              mean: [0.4573, 0.4373, 0.4045]
+              std: [0.2675, 0.2643, 0.2780]
