@@ -21,6 +21,7 @@ from contextlib import contextmanager
 
 # Third-Party Library
 import loguru
+import numpy as np
 from rich import box
 from rich.text import Text
 from rich.live import Live
@@ -39,6 +40,7 @@ from rich.abc import RichRenderable
 from rich.console import Console, ConsoleOptions, RenderResult
 
 # Torch Library
+import torch
 
 # My Library
 
@@ -255,11 +257,22 @@ class RichuruLogger:
 
         row = []
         for info_idx, (key, value) in enumerate(info_dict.items()):
-            row.extend([Text(f"{key}", style="bold"), Text(f"{value:.2f}")])
+            row.extend(
+                [
+                    Text(f"{key}", style="bold"),
+                    Text(
+                        f"{value:.2f}"
+                        if isinstance(value, (float, torch.Tensor, np.ndarray))
+                        else f"{value}"
+                    ),
+                ]
+            )
             if (info_idx + 1) % info_per_row == 0:
                 table.add_row(*row)
                 row = []
-        table.add_row(*row)
+
+        if len(row) > 0:
+            table.add_row(*row)
         return table
 
     def export_html(self):
