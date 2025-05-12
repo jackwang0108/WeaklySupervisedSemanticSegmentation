@@ -58,7 +58,10 @@ def _auto_discover_algorithms():
 _auto_discover_algorithms()
 
 
-Algorithms = Literal["ExCEL",]
+Algorithms = Literal[
+    "EXAMPLE",
+    "ExCEL",
+]
 
 
 def get_algorithm(algorithm_name: Algorithms):
