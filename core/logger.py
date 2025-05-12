@@ -112,7 +112,7 @@ class RichuruLogger:
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
-        self.file_console = Console(file=(log_dir / "log.log").open(mode="a"))
+        self.file_console = Console(file=(log_dir / "running.log").open(mode="a"))
         self.terminal_console = Console(stderr=True)
 
         self._setup_layout()
