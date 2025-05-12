@@ -1,7 +1,7 @@
 apikeys:
-    chatgpt4:
+    gpt4:
         key: <your_openai_api_key>
-        endpoint: https://api.openai.com/v1/chat/completions
+        base_url: https://api.openai.com/v1
     deepseek:
         key: <your_deepseek_api_key>
-        endpoint: https://api.deepseek.ai/v1/chat/completions
+        base_url: https://api.deepseek.com
