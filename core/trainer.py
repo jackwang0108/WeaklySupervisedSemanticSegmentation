@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 # Third-Party Library
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 # Torch Library
 import torch
@@ -43,12 +43,13 @@ from algorithms.base import (
 
 class Trainer:
     def __init__(self, algorithm: WSSSAlgorithm, config: DictConfig):
-        self.config = config
+
+        self.setup_config(config)
 
         self.epoch = 0
-        self.best_epoch = None
-        self.best_losses: dict[str, float] = None
-        self.best_metrics: dict[str, float] = None
+        self.best_epoch = 0
+        self.best_metrics: dict[str, float] = {"mIoU": 0.0}
+        self.best_losses: dict[str, float] = {"val_loss": float("inf")}
 
         self.device = get_device()
         self.dtype = get_dtype(config.data.dtype)
@@ -57,7 +58,7 @@ class Trainer:
 
         self.log_dir = (
             Path(__file__).resolve().parents[1]
-            / f"logs/{ self.config.algorithm.name}/{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}"
+            / f"logs/{ self.config.algorithm.name}/{datetime.now():%Y%m%d-%H:%M:%S}/"
         )
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -68,6 +69,20 @@ class Trainer:
         self.setup_tensorboard(log_dir=self.log_dir)
         self.setup_logger()
         self.setup_algorithm()
+
+    def __del__(self):
+        self.config.running_info["finished_at"] = f"{datetime.now():%Y%m%d-%H:%M:%S}"
+        self.save_config(self.log_dir / "training_config.yaml")
+        self.writer.close()
+
+    def setup_config(self, config: DictConfig):
+        config.running_info = {
+            "start_at": None,
+            "training_at": None,
+            "finished_at": None,
+        }
+        config.running_info["start_at"] = f"{datetime.now():%Y%m%d-%H%M%S}"
+        self.config = config
 
     def setup_algorithm(self):
 
@@ -114,6 +129,7 @@ class Trainer:
 
     def load_checkpoint(self, load_file: Optional[str | Path] = None):
         if load_file is None:
+            self.kwargs = {}
             return
 
         checkpoint = torch.load(load_file, map_location=self.device)
@@ -124,16 +140,18 @@ class Trainer:
         self.epoch = checkpoint["epoch"]
         self.kwargs = checkpoint["kwargs"]
         self.best_epoch = checkpoint["best_epoch"]
-        self.best_losses = checkpoint["best_losses"]
-        self.best_metrics = checkpoint["best_metrics"]
+        self.best_losses |= checkpoint["best_losses"]
+        self.best_metrics |= checkpoint["best_metrics"]
 
     def save_checkpoint(
-        self, save_path: Path, is_best: bool = False, kwargs: dict[str, Any] = None
+        self, save_dir: Path, is_best: bool = False, kwargs: dict[str, Any] = None
     ):
         if kwargs is None:
             kwargs = {}
+        else:
+            self.kwargs.update(kwargs)
 
-        save_path.parent.mkdir(parents=True, exist_ok=True)
+        save_dir.mkdir(parents=True, exist_ok=True)
         checkpoint = {
             "algorithm": self.algorithm.__class__.__name__,
             "model": self.algorithm.model.state_dict(),
@@ -143,11 +161,13 @@ class Trainer:
             "best_epoch": self.best_epoch,
             "best_losses": self.best_losses,
             "best_metrics": self.best_metrics,
-            "kwargs": kwargs,
+            "kwargs": self.kwargs,
         }
 
         # current epoch state dict
-        torch.save(checkpoint, save_path)
+        if getattr(self, "first_epoch", None) is None:
+            self.logger.success(f"Training checkpoints is saved to logs/checkpoints")
+            self.first_epoch = False
 
         # save every N epochs
         if (
@@ -156,19 +176,23 @@ class Trainer:
         ):
             torch.save(
                 checkpoint,
-                save_path.parent / f"{save_path.stem}_e{self.epoch}.{save_path.suffix}",
+                save_dir / f"{save_dir.stem}_e{self.epoch}.pth",
             )
 
         # save best model
         if is_best:
             torch.save(
                 checkpoint,
-                save_path.parent / f"{save_path.stem}_best.{save_path.suffix}",
+                save_dir / f"{save_dir.stem}_best.pth",
             )
             torch.save(
                 self.get_model_state_dict(),
-                save_path.parent / f"{save_path.stem}_model.{save_path.suffix}",
+                save_dir / f"{save_dir.stem}_model.pth",
             )
+
+    def save_config(self, save_path: Optional[str | Path] = None):
+        save_path.parent.mkdir(exist_ok=True, parents=True)
+        OmegaConf.save(self.config, save_path)
 
     def get_model_state_dict(self):
         self.algorithm.model.to("cpu")
@@ -177,26 +201,32 @@ class Trainer:
         return model.state_dict()
 
     def train_epoch(self):
-        for i, batch_data in enumerate(self.train_loader):
+        for batch_idx, batch_data in enumerate(self.train_loader):
             batch_data = to(batch_data, self.dtype, self.device)
 
             self.optimizer.zero_grad()
-            returns = self.algorithm.train_step(batch_data, self.epoch, i)
+            returns = self.algorithm.train_step(batch_data, self.epoch, batch_idx)
             returns["loss"].backward()
             self.optimizer.step()
 
-            if i % self.config.train.log_interval == 0:
+            if batch_idx % self.config.train.log_interval == 0:
                 self.logger.info(
-                    f"Epoch {self.epoch} [{i}/{len(self.train_loader)}], Loss {returns['loss']:.4f}"
+                    f"Epoch [{self.epoch:{len(str(self.epoch))}}] "
+                    f"Batch [{batch_idx:{len(str(len(self.train_loader)))}}/{len(self.train_loader)}], "
+                    f"Loss {returns['loss']:.4f}"
                 )
 
             self.logger.update_batch(self.algorithm.get_info_dict())
+
+            if batch_idx == 10:
+                break
 
     @torch.no_grad()
     def validate_epoch(self):
         return {"val_loss": random.random()}, {"mIoU": random.random()}
 
     def train(self):
+        self.config.running_info["training_at"] = f"{datetime.now():%Y%m%d-%H:%M:%S}"
 
         with self.logger.training_context():
             for epoch in range(self.epoch, self.config.train.epochs):
@@ -212,9 +242,9 @@ class Trainer:
                     self.best_losses |= val_metrics
                     self.best_metrics |= val_metrics
                 self.save_checkpoint(
-                    self.log_dir / f"checkpoint_e{self.epoch}.pth",
+                    self.log_dir / "checkpoints",
                     is_best=is_best,
-                    extra={"epoch": self.epoch},
+                    kwargs={"epoch": self.epoch},
                 )
 
                 self.logger.update_epoch(self.algorithm.get_info_dict())
