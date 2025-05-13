@@ -20,6 +20,7 @@ from .. import register_algorithm
 from ..base import WeaklySupervisedSemanticSegmentationAlgorithm as WSSSAlgorithm
 
 from .model import ExCELModel
+from .helper import ClassNames, get_descriptions
 
 
 @register_algorithm("ExCEL")

@@ -12,12 +12,12 @@ get_descriptions.py 调用第三方语言模型生成类别描述
 import json
 from pathlib import Path
 from typing import Literal
-from functools import partial
+from dataclasses import dataclass
 from collections.abc import Callable
 
 # Third-Party Library
 from openai import OpenAI
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
 from openai.types.chat import ChatCompletion
 
 # Torch Library
@@ -25,12 +25,122 @@ from openai.types.chat import ChatCompletion
 # My Library
 
 
+@dataclass
+class ClassNames:
+
+    voc: list[str] = (
+        "aeroplane",
+        "bicycle",
+        "bird",
+        "boat",
+        "bottle",
+        "bus",
+        "car",
+        "cat",
+        "chair",
+        "cow",
+        "diningtable",
+        "dog",
+        "horse",
+        "motorbike",
+        "person",
+        "pottedplant",
+        "sheep",
+        "sofa",
+        "train",
+        "tvmonitor",
+    )
+
+    coco: list[str] = (
+        "person",
+        "bicycle",
+        "car",
+        "motorbike",
+        "aeroplane",
+        "bus",
+        "train",
+        "truck",
+        "boat",
+        "traffic light",
+        "fire hydrant",
+        "stop sign",
+        "parking meter",
+        "bench",
+        "bird",
+        "cat",
+        "dog",
+        "horse",
+        "sheep",
+        "cow",
+        "elephant",
+        "bear",
+        "zebra",
+        "giraffe",
+        "backpack",
+        "umbrella",
+        "handbag",
+        "tie",
+        "suitcase",
+        "frisbee",
+        "skis",
+        "snowboard",
+        "sports ball",
+        "kite",
+        "baseball bat",
+        "baseball glove",
+        "skateboard",
+        "surfboard",
+        "tennis racket",
+        "bottle",
+        "wine glass",
+        "cup",
+        "fork",
+        "knife",
+        "spoon",
+        "bowl",
+        "banana",
+        "apple",
+        "sandwich",
+        "orange",
+        "broccoli",
+        "carrot",
+        "hot dog",
+        "pizza",
+        "donut",
+        "cake",
+        "chair",
+        "sofa",
+        "pottedplant",
+        "bed",
+        "diningtable",
+        "toilet",
+        "tvmonitor",
+        "laptop",
+        "mouse",
+        "remote",
+        "keyboard",
+        "cell phone",
+        "microwave",
+        "oven",
+        "toaster",
+        "sink",
+        "refrigerator",
+        "book",
+        "clock",
+        "vase",
+        "scissors",
+        "teddy bear",
+        "hair drier",
+        "toothbrush",
+    )
+
+
 # Sec.3.2. Text Semantic Enrichment
 instruction = """ List {n} descriptions with key properties to describe the [CLASS] in terms of appearance, color, shape, size, or material, etc. These descriptions will help visually distinguish the [CLASS] from other classes in the dataset.  Each description should follow the format: 'a clean [CLASS]. it + descriptive contexts.'. You give {n} descriptions directly. Do not add any other information. The descriptions should be in English. The descriptions should be unique and not repeated. The descriptions should be relevant to the [CLASS] and should not include any irrelevant information.
 """
 
 
-def get_client(
+def _get_client(
     which: Literal["gpt4", "deepseek"],
 ) -> tuple[OpenAI, Callable[[str], ChatCompletion]]:
     apikey = OmegaConf.to_container(
@@ -55,11 +165,11 @@ def get_client(
     return (client, func)
 
 
-def get_description_generator(
+def _get_description_generator(
     which: Literal["gpt4", "deepseek"],
 ) -> Callable[[str, int], list[str]]:
 
-    _, func = get_client(which)
+    _, func = _get_client(which)
 
     def get_descriptions(class_name: str, n: int) -> list[str]:
         prompt = instruction.replace("{n}", str(n)).replace("[CLASS]", class_name)
@@ -88,7 +198,7 @@ def get_descriptions(
     else:
         cached_descriptions = {}
 
-    get_descriptions = get_description_generator(which)
+    get_descriptions = _get_description_generator(which)
     descriptions = {
         class_name: get_descriptions(class_name, n) for class_name in class_names
     }
