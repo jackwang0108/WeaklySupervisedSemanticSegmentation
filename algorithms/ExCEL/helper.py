@@ -211,6 +211,4 @@ def get_descriptions(
 
 if __name__ == "__main__":
 
-    from .classenames import ClassNames
-
     print(get_descriptions("coco", ClassNames.coco, 20, "deepseek"))
