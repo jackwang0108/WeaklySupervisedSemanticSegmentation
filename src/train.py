@@ -17,7 +17,7 @@ from omegaconf import DictConfig
 # Torch Library
 
 # My Library
-from core import Trainer
+from core.trainer import Trainer
 from configs.config import build_config
 from algorithms import get_algorithm
 from algorithms.base import (
