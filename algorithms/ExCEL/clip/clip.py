@@ -19,13 +19,14 @@ from packaging import version
 # Third-Party Library
 from tqdm import tqdm
 from PIL import Image
+from torchvision.transforms import Compose
 
 # Torch Library
 import torch
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
 
 # My Library
-from .model import build_model
+from .model import build_model, CLIP
 from .simple_tokenizer import SimpleTokenizer as _Tokenizer
 
 try:
@@ -133,31 +134,23 @@ def load(
     device: str | torch.device = "cuda" if torch.cuda.is_available() else "cpu",
     jit: bool = False,
     download_root: str = None,
-):
-    """Load a CLIP model
-
-    Parameters
-    ----------
-    name : str
-        A model name listed by `clip.available_models()`, or the path to a model checkpoint containing the state_dict
-
-    device : Union[str, torch.device]
-        The device to put the loaded model
-
-    jit : bool
-        Whether to load the optimized JIT model or more hackable non-JIT model (default).
-
-    download_root: str
-        path to download the model files; by default, it uses "~/.cache/clip"
-
-    Returns
-    -------
-    model : torch.nn.Module
-        The CLIP model
-
-    preprocess : Callable[[PIL.Image], torch.Tensor]
-        A torchvision transform that converts a PIL image into a tensor that the returned model can take as its input
+) -> tuple[CLIP, Compose]:
     """
+    load 加载指定类别的CLIP模型
+
+    load首先读取参数文件, 而后通过build_model函数构建模型
+
+    Args:
+        name (str): CLIP模型名称 或者 模型参数的路径
+        device (str | torch.device, optional): 指定加载的设备. Defaults to "cuda" if torch.cuda.is_available()else"cpu".
+        jit (bool, optional): 加载优化过的JIT模型还是更加灵活的non-JIT模型. Defaults to False.
+        download_root (str, optional): 模型参数的保存路径, 默认为 ~/.cache/clip. Defaults to None.
+
+
+    Returns:
+        tuple[CLIP, Compose]: CLIP模型和图像的预处理工具
+    """
+
     if name in _MODELS:
         model_path = _download(
             _MODELS[name], download_root or os.path.expanduser("~/.cache/clip")

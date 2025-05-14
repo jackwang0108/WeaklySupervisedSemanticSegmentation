@@ -12,6 +12,7 @@ model.py 定义了CLIP算法的模型
 from collections import OrderedDict
 
 # Third-Party Library
+import PIL.Image as Image
 
 # Torch Library
 
@@ -425,10 +426,10 @@ class CLIP(nn.Module):
     def dtype(self):
         return self.visual.conv1.weight.dtype
 
-    def encode_image(self, image):
+    def encode_image(self, image: torch.Tensor) -> torch.Tensor:
         return self.visual(image.type(self.dtype))
 
-    def encode_text(self, text):
+    def encode_text(self, text: torch.Tensor) -> torch.Tensor:
         x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
 
         x = x + self.positional_embedding.type(self.dtype)
@@ -490,6 +491,17 @@ def convert_weights(model: nn.Module):
 
 
 def build_model(state_dict: dict[str, torch.Tensor]) -> CLIP:
+    """
+    build_model 通过模型的参数构建模型
+
+    CLIP提供了两种模型结构，一种是ViT结构，另一种是ResNet结构。区别只是视觉编码器的不同。文本编码器都一样
+
+    Args:
+        state_dict (dict[str, torch.Tensor]): 模型的参数
+
+    Returns:
+        CLIP: CLIP模型
+    """
     vit = "visual.proj" in state_dict
 
     if vit:
