@@ -6,7 +6,7 @@ data:
 
 algorithm:
     name: "ExCEL"
-    backbone: "resnet101"
+    backbone: "ViT-B/32"
 
     # 优化器
     optimizer:
@@ -19,7 +19,7 @@ algorithm:
 
     # 超参数
     # 参考 4.1. Experimental Settings, Implementation Details.
-    num_descriptors: 20
+    num_descriptions: 20
     num_attribute_embeddings:
         voc: 112
         coco: 224
@@ -30,3 +30,29 @@ algorithm:
     shifting_factor: 1.0
 
     loss_weight_gamma: 0.1
+
+train:
+    epochs: 200
+    transform:
+        - name: "ToTensor"
+        - name: "Resize"
+          params:
+              # ExCEL使用了CLIP的Visual Encoder
+              # 所以数据增强必须要和CLIP一致
+              size: [224, 224]
+        - name: "Normalize"
+          params:
+              # mean和std用自己的, 因为都是放缩到-1~1的分布
+              mean: [0.4573, 0.4373, 0.4045]
+              std: [0.2675, 0.2643, 0.2780]
+
+val:
+    transform:
+        - name: "ToTensor"
+        - name: "Resize"
+          params:
+              size: [224, 224]
+        - name: "Normalize"
+          params:
+              mean: [0.4573, 0.4373, 0.4045]
+              std: [0.2675, 0.2643, 0.2780]
