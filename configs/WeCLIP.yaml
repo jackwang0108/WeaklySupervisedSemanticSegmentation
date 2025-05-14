@@ -1,0 +1,27 @@
+_defaults_:
+    - base.yaml
+
+data:
+    dataset_using: "voc"
+
+algorithm:
+    name: "EXAMPLE"
+    backbone: "resnet101"
+
+    in_channels: 3
+    out_channels: 512
+    num_classes: 21
+
+    # 优化器
+    optimizer:
+        name: "SGD"
+        params:
+            lr: 0.0001
+
+    scheduler:
+        name: "StepLR"
+        params:
+            step_size: 10
+            gamma: 0.1
+
+    # 超参数

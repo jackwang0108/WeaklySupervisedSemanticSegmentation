@@ -60,6 +60,7 @@ _auto_discover_algorithms()
 
 Algorithms = Literal[
     "EXAMPLE",
+    "WeCLIP",
     "ExCEL",
 ]
 
