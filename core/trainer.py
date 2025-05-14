@@ -77,11 +77,10 @@ class Trainer:
 
     def setup_config(self, config: DictConfig):
         config.running_info = {
-            "start_at": None,
             "training_at": None,
             "finished_at": None,
+            "start_at": f"{datetime.now():%Y%m%d-%H%M%S}",
         }
-        config.running_info["start_at"] = f"{datetime.now():%Y%m%d-%H%M%S}"
         self.config = config
 
     def setup_algorithm(self):
@@ -166,7 +165,7 @@ class Trainer:
 
         # current epoch state dict
         if getattr(self, "first_epoch", None) is None:
-            self.logger.success(f"Training checkpoints is saved to logs/checkpoints")
+            self.logger.success("Training checkpoints is saved to logs/checkpoints")
             self.first_epoch = False
 
         # save every N epochs
