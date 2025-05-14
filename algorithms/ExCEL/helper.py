@@ -11,9 +11,9 @@ get_descriptions.py 调用第三方语言模型生成类别描述
 # Standard Library
 import json
 from pathlib import Path
-from typing import Literal
 from dataclasses import dataclass
 from collections.abc import Callable
+from typing import Literal, Optional
 
 # Third-Party Library
 from openai import OpenAI
@@ -181,11 +181,11 @@ def _get_description_generator(
 
 
 def get_descriptions(
-    dataset: str,
+    dataset: Literal["voc", "coco"],
     class_names: list[str],
     n: int,
-    which: Literal["gpt4", "deepseek"] = "gpt4",
-) -> list[str]:
+    which: Optional[Literal["gpt4", "deepseek"]] = "deepseek",
+) -> dict[str, list[str]]:
 
     if (
         description_file := Path(__file__).resolve().parent / "descriptions.json"
@@ -194,9 +194,17 @@ def get_descriptions(
             cached_descriptions: dict[str, dict[str, list[str]]] = json.load(f)
 
         if dataset in cached_descriptions:
-            return cached_descriptions[dataset]
+            cache = cached_descriptions[dataset]
+            for class_name in class_names:
+                assert (
+                    len(cache[class_name]) == n
+                ), f"Cache file found, but the number of descriptions for {class_name} is less than {n}. Remove the cache file to regenerate."
+            return cache
     else:
         cached_descriptions = {}
+        assert (
+            which is not None
+        ), "Cache file not found, please specify which model to use to generate descriptions."
 
     get_descriptions = _get_description_generator(which)
     descriptions = {
@@ -210,5 +218,12 @@ def get_descriptions(
 
 
 if __name__ == "__main__":
+    import torch
+    from . import clip
 
-    print(get_descriptions("coco", ClassNames.coco, 20, "deepseek"))
+    descriptions = get_descriptions("voc", ClassNames.voc, 20, "deepseek")
+    descriptions = sum(descriptions.values(), [])
+
+    device = torch.device("mps")
+    text_tokens = clip.tokenize(descriptions, truncate=True).to(device)
+    print(text_tokens.shape)
