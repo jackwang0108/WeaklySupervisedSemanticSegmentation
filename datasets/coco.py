@@ -129,11 +129,11 @@ class COCO2014WSSSDataset(COCO2014Dataset):
     def get_weakly_supervision_label(self, semantic_mask: torch.Tensor) -> torch.Tensor:
         """获得弱监督标签, 这里的弱监督标签是图像级的物体类别one-hot向量"""
         image_classes = semantic_mask.unique()
-        image_classes = image_classes[(image_classes != 0) & (image_classes != 255)]
+        image_classes = image_classes[(image_classes != 255)]
 
-        one_hot = torch.zeros(80, dtype=torch.long)
+        one_hot = torch.zeros(81, dtype=torch.long)
         if len(image_classes) > 0:
-            one_hot[image_classes - 1] = 1
+            one_hot[image_classes] = 1
         return one_hot
 
     def __getitem__(
@@ -142,8 +142,6 @@ class COCO2014WSSSDataset(COCO2014Dataset):
         """
         Note:
             语义分割的label, 即segmentation mask, 是一个二维的Tensor. 其中的0表示背景类, 物体类的label是从1开始的
-
-            但是弱监督标签, 即图像级的物体类别one-hot向量, 是label转的一维的Tensor. 物体类的label直接从0开始
         """
         _, image, annotations = super().__getitem__(index)
 
