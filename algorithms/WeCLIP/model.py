@@ -214,6 +214,14 @@ class FeatureDecoder(nn.Module):
 
 class WeCLIPModel(nn.Module):
     def __init__(self, backbone: str, feature_dim: int = 256, num_classes: int = 21):
+        """
+        WeCLIP算法中的网络模型
+
+        Args:
+            backbone (str): 使用的CLIP的Vision Encoder的backbone. 原论文中是VIT.
+            feature_dim (int, optional): Decoder中自注意模块的特征维度. Defaults to 256.
+            num_classes (int, optional): 类别数量. Defaults to 21.
+        """
         super().__init__()
 
         self.backbone = backbone
