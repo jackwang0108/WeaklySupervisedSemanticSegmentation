@@ -235,10 +235,12 @@ class WeCLIPModel(nn.Module):
             num_features=self.clip.vision_layers,
         )
 
-    def forward(self, image: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, image: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # image: [B, 3, 224, 224]
         # feature_map: [B, num_layer, h, w, feature_dim]
-        _, feature_map = self.encode_image(image)
+        _, feature_map, attention_maps = self.encode_image(image)
 
         # fused_feature_map: [B, h, w, feature_dim]
         # prediction_mask: [B, num_classes, h, w]
@@ -250,7 +252,9 @@ class WeCLIPModel(nn.Module):
             fused_feature_map @ fused_feature_map.transpose(-2, -1)
         ).sigmoid()
 
-        return affinity_map, prediction_mask
+        # affinity map: [B, h * w, h * w]
+        # attention maps: [B, num_layer, h * w, h * w]
+        return affinity_map, prediction_mask, attention_maps
 
     @property
     def dtype(self) -> torch.dtype:
@@ -264,7 +268,8 @@ class WeCLIPModel(nn.Module):
     def encode_image(self, image: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         image_feature: torch.Tensor  # [B, 512]
         patch_feature: torch.Tensor  # [B, num_layer, num_patches + 1, token_dim]
-        image_feature, patch_feature = self.clip.encode_image(image)
+        attention_maps: torch.Tensor  # [B, num_layer, num_patches + 1, num_patches + 1]
+        (image_feature, patch_feature, attention_maps) = self.clip.encode_image(image)
 
         # 注意, 这里去掉了clip的Vision Transformer中在token序列最前面添加的CLS token
         # [B, num_layer, num_patches + 1, token_dim] -> [B, num_layer, num_patches, token_dim]
@@ -277,7 +282,15 @@ class WeCLIPModel(nn.Module):
         # [B, num_layer, token_dim, h, w] -> [B, num_layer, h, w, token_dim]
         feature_map = feature_map.permute(0, 1, 3, 4, 2)
 
-        return image_feature, feature_map
+        # 同样去掉CLS token的注意力
+        # image_feature: [B, 512]
+        # feature_map: [B, num_layer, h, w, token_dim]
+        # attention_maps: [B, num_layer, h * w, h * w]
+        return (
+            image_feature,
+            feature_map,
+            torch.stack(attention_maps, dim=1)[:, :, 1:, 1:],
+        )
 
     @torch.no_grad()
     def encode_text(
@@ -296,9 +309,13 @@ class WeCLIPModel(nn.Module):
 
 
 if __name__ == "__main__":
+
+    import torch.nn.functional as F
+
     model = WeCLIPModel("ViT-B/32")
 
     image = torch.randn(2, 3, 224, 224)
-    affinity_map, prediction_mask = model(image)
+    affinity_map, prediction_mask, attention_maps = model(image)
     print(affinity_map.shape)
     print(prediction_mask.shape)
+    print(attention_maps.shape)
