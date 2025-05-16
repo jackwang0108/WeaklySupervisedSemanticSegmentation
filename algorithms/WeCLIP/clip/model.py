@@ -211,9 +211,19 @@ class QuickGELU(nn.Module):
 
 
 class ResidualAttentionBlock(nn.Module):
-    def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
+    def __init__(
+        self,
+        d_model: int,
+        n_head: int,
+        attn_mask: torch.Tensor = None,
+        return_attention_map: bool = False,
+    ):
         """
-        CLIP原始的Self-Attention的实现,
+        对CLIP原始的Self-Attention的实现进行了修改, 使其能够返回Attention Map
+
+        因为WeCLIP在Grad-CAM Refinement Module中对Grad-CAM的结果进行Refine的时候需要使用
+        CLIP的Vision Transformer中的Self-Attention Module计算得到的Attention Map
+        而CLIP原始的实现中并没有返回Attention Map, 所以这里对CLIP原始的实现进行了修改, 使其能够返回Attention Map
 
         Args:
             d_model (int): 输入token序列中每个token的维度, 文本是512, 图像是768
@@ -224,6 +234,7 @@ class ResidualAttentionBlock(nn.Module):
 
         self.n_head = n_head
         self.d_model = d_model
+        self.return_attention_map = return_attention_map
 
         self.attn = nn.MultiheadAttention(d_model, n_head)
         self.ln_1 = LayerNorm(d_model)
@@ -239,18 +250,26 @@ class ResidualAttentionBlock(nn.Module):
         self.ln_2 = LayerNorm(d_model)
         self.attn_mask = attn_mask
 
-    def attention(self, x: torch.Tensor) -> torch.Tensor:
+    def attention(
+        self, x: torch.Tensor
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         self.attn_mask = (
             self.attn_mask.to(dtype=x.dtype, device=x.device)
             if self.attn_mask is not None
             else None
         )
+        if self.return_attention_map:
+            return self.attn(x, x, x, need_weights=True, attn_mask=self.attn_mask)
         return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask)[0]
 
-    def forward(self, x: torch.Tensor):
-        x = x + self.attention(self.ln_1(x))
+    def forward(
+        self, x: torch.Tensor
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        result = self.attention(self.ln_1(x.clone()))
+        x = x + result[0] if self.return_attention_map else result
         x = x + self.mlp(self.ln_2(x))
-        return x
+
+        return (x, result[1]) if self.return_attention_map else x
 
 
 class Transformer(nn.Module):
@@ -292,12 +311,14 @@ class TracingSequential(nn.Sequential):
     """
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
-        intermediates = []
+        intermediate_features = []
+        intermediate_attention_maps = []
         for module in self:
-            x = module(x)
+            x, attention_map = module(x)
             # clone().detach()是为了防止梯度回传到CLIP
-            intermediates.append(x.clone().detach())
-        return x, intermediates
+            intermediate_features.append(x.clone().detach())
+            intermediate_attention_maps.append(attention_map.clone().detach())
+        return x, intermediate_features, intermediate_attention_maps
 
 
 class CustomTransformer(nn.Module):
@@ -309,10 +330,15 @@ class CustomTransformer(nn.Module):
         self.layers = layers
 
         self.resblocks = TracingSequential(
-            *[ResidualAttentionBlock(width, heads, attn_mask) for _ in range(layers)]
+            *[
+                ResidualAttentionBlock(width, heads, attn_mask, True)
+                for _ in range(layers)
+            ]
         )
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
+    def forward(
+        self, x: torch.Tensor
+    ) -> tuple[torch.Tensor, list[torch.Tensor], list[torch.Tensor]]:
         return self.resblocks(x)
 
 
@@ -363,7 +389,9 @@ class VisionTransformer(nn.Module):
         self.ln_post = LayerNorm(width)
         self.proj = nn.Parameter(scale * torch.randn(width, output_dim))
 
-    def forward(self, x: torch.Tensor):
+    def forward(
+        self, x: torch.Tensor
+    ) -> tuple[torch.Tensor, list[torch.Tensor], list[torch.Tensor]]:
         """
         图像大小 224, 分块大小 32, 则分块后有 7 * 7 = 49 个块, 即49个token
         每个token通过conv中的weight矩阵投影到768维, 然后再拼接一个可学习的classification token
@@ -392,8 +420,9 @@ class VisionTransformer(nn.Module):
         x = x.permute(1, 0, 2)  # NLD -> LND
         # CLIP原始的实现
         # x = self.transformer(x)
-        intermediates: list[torch.Tensor]
-        x, intermediates = self.transformer(x)
+        intermediate_features: list[torch.Tensor]
+        intermediate_attention_maps: list[torch.Tensor]
+        x, intermediate_features, intermediate_attention_maps = self.transformer(x)
         x = x.permute(1, 0, 2)  # LND -> NLD
 
         x = self.ln_post(x[:, 0, :])
@@ -401,7 +430,11 @@ class VisionTransformer(nn.Module):
         if self.proj is not None:
             x = x @ self.proj
 
-        return x, [i.permute(1, 0, 2) for i in intermediates]
+        return (
+            x,
+            [i.permute(1, 0, 2) for i in intermediate_features],
+            intermediate_attention_maps,
+        )
 
 
 class CLIP(nn.Module):
@@ -516,7 +549,9 @@ class CLIP(nn.Module):
     def dtype(self):
         return self.visual.conv1.weight.dtype
 
-    def encode_image(self, image: torch.Tensor) -> torch.Tensor:
+    def encode_image(
+        self, image: torch.Tensor
+    ) -> tuple[torch.Tensor, list[torch.Tensor], list[torch.Tensor]]:
         return self.visual(image.type(self.dtype))
 
     def encode_text(self, text: torch.Tensor) -> torch.Tensor:
