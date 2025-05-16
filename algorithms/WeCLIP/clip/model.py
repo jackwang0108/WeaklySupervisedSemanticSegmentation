@@ -212,7 +212,18 @@ class QuickGELU(nn.Module):
 
 class ResidualAttentionBlock(nn.Module):
     def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
+        """
+        CLIP原始的Self-Attention的实现,
+
+        Args:
+            d_model (int): 输入token序列中每个token的维度, 文本是512, 图像是768
+            n_head (int): MultiheadAttention的头数, 文本默认是8, 图像默认是12
+            attn_mask (torch.Tensor, optional): _description_. Defaults to None.
+        """
         super().__init__()
+
+        self.n_head = n_head
+        self.d_model = d_model
 
         self.attn = nn.MultiheadAttention(d_model, n_head)
         self.ln_1 = LayerNorm(d_model)
@@ -228,7 +239,7 @@ class ResidualAttentionBlock(nn.Module):
         self.ln_2 = LayerNorm(d_model)
         self.attn_mask = attn_mask
 
-    def attention(self, x: torch.Tensor):
+    def attention(self, x: torch.Tensor) -> torch.Tensor:
         self.attn_mask = (
             self.attn_mask.to(dtype=x.dtype, device=x.device)
             if self.attn_mask is not None
@@ -246,8 +257,21 @@ class Transformer(nn.Module):
     def __init__(
         self, width: int, layers: int, heads: int, attn_mask: torch.Tensor = None
     ):
+        """
+        CLIP原始的Transformer实现.
+
+        对于文本, CLIP (所有版本) 首先计算文本的词向量, 然后直接传入transformer中处理, 得到词向量的特征
+        对于图像, CLIP (VIT版本) 首先对图像分块, 对每个块做投影之后得到输入的token序列, 再传入transformer
+
+        Args:
+            width (int): Token序列中每个Token的维度, 文本是512, 图像是768
+            layers (int): Transformer中Self-Attention的层数, 对于文本和图像都一样, 默认是12
+            heads (int): MultiheadAttention的头数, 文本默认是8, 图像默认是12
+            attn_mask (torch.Tensor, optional): Attention Mask. Defaults to None.
+        """
         super().__init__()
         self.width = width
+        self.heads = heads
         self.layers = layers
         self.resblocks = nn.Sequential(
             *[ResidualAttentionBlock(width, heads, attn_mask) for _ in range(layers)]
@@ -257,7 +281,43 @@ class Transformer(nn.Module):
         return self.resblocks(x)
 
 
+class TracingSequential(nn.Sequential):
+    """
+    自定义的Sequential类, 在forward的时候会保存中间结果, 最终一并返回
+
+    WeCLIP中需要Transformer计算得到的feature map作为feature decoder的输入, 所以需要
+    在forward的时候保存中间结果, 但是nn.Sequential的forward方法不支持保存中间结果
+    所以这里自定义了一个TracingSequential类, 继承自nn.Sequential, 重写了forward方法
+
+    """
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
+        intermediates = []
+        for module in self:
+            x = module(x)
+            # clone().detach()是为了防止梯度回传到CLIP
+            intermediates.append(x.clone().detach())
+        return x, intermediates
+
+
+class CustomTransformer(nn.Module):
+    def __init__(self, width, layers, heads, attn_mask=None):
+        super().__init__()
+
+        self.width = width
+        self.heads = heads
+        self.layers = layers
+
+        self.resblocks = TracingSequential(
+            *[ResidualAttentionBlock(width, heads, attn_mask) for _ in range(layers)]
+        )
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
+        return self.resblocks(x)
+
+
 class VisionTransformer(nn.Module):
+
     def __init__(
         self,
         input_resolution: int,
@@ -267,6 +327,17 @@ class VisionTransformer(nn.Module):
         heads: int,
         output_dim: int,
     ):
+        """
+        CLIP的Vision Transformer实现
+
+        Args:
+            input_resolution (int): 模型输入的图像的分辨率, 在build_model中根据模型第一层的参数形状计算出来. VIT-B/32模型为224
+            patch_size (int): 图像分块时的分块大小, 在build_model中根据模型第一层的参数形状计算出来. VIT-B/32模型为32
+            width (int): Token序列中每个Token的维度, VIT-B/32模型为768
+            layers (int): Encoder中Self-Attention的层数, VIT-B/32模型为12
+            heads (int): MultiheadAttention的头数, VIT-B/32模型为12
+            output_dim (int): 输出图像特征的维度, VIT-B/32模型为512
+        """
         super().__init__()
         self.input_resolution = input_resolution
         self.output_dim = output_dim
@@ -285,12 +356,23 @@ class VisionTransformer(nn.Module):
         )
         self.ln_pre = LayerNorm(width)
 
-        self.transformer = Transformer(width, layers, heads)
+        # CLIP原始的Transformer
+        # self.transformer = Transformer(width, layers, heads)
+        self.transformer = CustomTransformer(width=width, layers=layers, heads=heads)
 
         self.ln_post = LayerNorm(width)
         self.proj = nn.Parameter(scale * torch.randn(width, output_dim))
 
     def forward(self, x: torch.Tensor):
+        """
+        图像大小 224, 分块大小 32, 则分块后有 7 * 7 = 49 个块, 即49个token
+        每个token通过conv中的weight矩阵投影到768维, 然后再拼接一个可学习的classification token
+        得到最终的输入token序列形状是 [batch_size, 50, 768], 50 = 49 + 1
+
+        transformer中保持token的维度不变, 所以输出的token序列形状也是 [batch_size, 50, 768]
+        但是最终只取了第一个可学习的token作为图像的特征, 所以形状变为 [batch_size, 768]
+        最后通过一个线性层投影到512维, 作为最终的图像特征
+        """
         x = self.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
@@ -308,7 +390,10 @@ class VisionTransformer(nn.Module):
         x = self.ln_pre(x)
 
         x = x.permute(1, 0, 2)  # NLD -> LND
-        x = self.transformer(x)
+        # CLIP原始的实现
+        # x = self.transformer(x)
+        intermediates: list[torch.Tensor]
+        x, intermediates = self.transformer(x)
         x = x.permute(1, 0, 2)  # LND -> NLD
 
         x = self.ln_post(x[:, 0, :])
@@ -316,7 +401,7 @@ class VisionTransformer(nn.Module):
         if self.proj is not None:
             x = x @ self.proj
 
-        return x
+        return x, [i.permute(1, 0, 2) for i in intermediates]
 
 
 class CLIP(nn.Module):
@@ -336,6 +421,11 @@ class CLIP(nn.Module):
         transformer_layers: int,
     ):
         super().__init__()
+
+        self.vision_width = vision_width
+        self.vision_layers = vision_layers
+        self.image_resolution = image_resolution
+        self.vision_patch_size = vision_patch_size
 
         self.context_length = context_length
 
