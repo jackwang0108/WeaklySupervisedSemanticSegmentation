@@ -1,21 +1,19 @@
 import torch
 import numpy as np
 from typing import List, Callable
-from pytorch_grad_cam.metrics.perturbation_confidence import PerturbationConfidenceMetric
+from .perturbation_confidence import PerturbationConfidenceMetric
 
 
-def multiply_tensor_with_cam(input_tensor: torch.Tensor,
-                             cam: torch.Tensor):
-    """ Multiply an input tensor (after normalization)
-        with a pixel attribution map
+def multiply_tensor_with_cam(input_tensor: torch.Tensor, cam: torch.Tensor):
+    """Multiply an input tensor (after normalization)
+    with a pixel attribution map
     """
     return input_tensor * cam
 
 
 class CamMultImageConfidenceChange(PerturbationConfidenceMetric):
     def __init__(self):
-        super(CamMultImageConfidenceChange,
-              self).__init__(multiply_tensor_with_cam)
+        super(CamMultImageConfidenceChange, self).__init__(multiply_tensor_with_cam)
 
 
 class DropInConfidence(CamMultImageConfidenceChange):

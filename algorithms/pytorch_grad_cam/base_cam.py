@@ -4,10 +4,10 @@ import numpy as np
 import torch
 import ttach as tta
 
-from pytorch_grad_cam.activations_and_gradients import ActivationsAndGradients
-from pytorch_grad_cam.utils.image import scale_cam_image
-from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
-from pytorch_grad_cam.utils.svd_on_activations import get_2d_projection
+from .activations_and_gradients import ActivationsAndGradients
+from .utils.image import scale_cam_image
+from .utils.model_targets import ClassifierOutputTarget
+from .utils.svd_on_activations import get_2d_projection
 
 
 class BaseCAM:
@@ -26,11 +26,13 @@ class BaseCAM:
 
         # Use the same device as the model.
         self.device = next(self.model.parameters()).device
-        if 'hpu' in str(self.device):
+        if "hpu" in str(self.device):
             try:
                 import habana_frameworks.torch.core as htcore
             except ImportError as error:
-                error.msg = f"Could not import habana_frameworks.torch.core. {error.msg}."
+                error.msg = (
+                    f"Could not import habana_frameworks.torch.core. {error.msg}."
+                )
                 raise error
             self.__htcore = htcore
         self.reshape_transform = reshape_transform
@@ -47,7 +49,9 @@ class BaseCAM:
             self.tta_transforms = tta_transforms
 
         self.detach = detach
-        self.activations_and_grads = ActivationsAndGradients(self.model, target_layers, reshape_transform, self.detach)
+        self.activations_and_grads = ActivationsAndGradients(
+            self.model, target_layers, reshape_transform, self.detach
+        )
 
     """ Get a vector of weights for every channel in the target layer.
         Methods that return weights channels,
@@ -72,7 +76,9 @@ class BaseCAM:
         grads: torch.Tensor,
         eigen_smooth: bool = False,
     ) -> np.ndarray:
-        weights = self.get_cam_weights(input_tensor, target_layer, targets, activations, grads)
+        weights = self.get_cam_weights(
+            input_tensor, target_layer, targets, activations, grads
+        )
         if isinstance(activations, torch.Tensor):
             activations = activations.cpu().detach().numpy()
         # 2D conv
@@ -91,7 +97,10 @@ class BaseCAM:
         return cam
 
     def forward(
-        self, input_tensor: torch.Tensor, targets: List[torch.nn.Module], eigen_smooth: bool = False
+        self,
+        input_tensor: torch.Tensor,
+        targets: List[torch.nn.Module],
+        eigen_smooth: bool = False,
     ) -> np.ndarray:
         input_tensor = input_tensor.to(self.device)
 
@@ -102,7 +111,9 @@ class BaseCAM:
 
         if targets is None:
             target_categories = np.argmax(outputs.cpu().data.numpy(), axis=-1)
-            targets = [ClassifierOutputTarget(category) for category in target_categories]
+            targets = [
+                ClassifierOutputTarget(category) for category in target_categories
+            ]
 
         if self.uses_gradients:
             self.model.zero_grad()
@@ -111,10 +122,12 @@ class BaseCAM:
                 loss.backward(retain_graph=True)
             else:
                 # keep the computational graph, create_graph = True is needed for hvp
-                torch.autograd.grad(loss, input_tensor, retain_graph = True, create_graph = True)
+                torch.autograd.grad(
+                    loss, input_tensor, retain_graph=True, create_graph=True
+                )
                 # When using the following loss.backward() method, a warning is raised: "UserWarning: Using backward() with create_graph=True will create a reference cycle"
                 # loss.backward(retain_graph=True, create_graph=True)
-            if 'hpu' in str(self.device):
+            if "hpu" in str(self.device):
                 self.__htcore.mark_step()
 
         # In most of the saliency attribution papers, the saliency is
@@ -134,17 +147,30 @@ class BaseCAM:
             width, height = input_tensor.size(-1), input_tensor.size(-2)
             return width, height
         elif len(input_tensor.shape) == 5:
-            depth, width, height = input_tensor.size(-1), input_tensor.size(-2), input_tensor.size(-3)
+            depth, width, height = (
+                input_tensor.size(-1),
+                input_tensor.size(-2),
+                input_tensor.size(-3),
+            )
             return depth, width, height
         else:
-            raise ValueError("Invalid input_tensor shape. Only 2D or 3D images are supported.")
+            raise ValueError(
+                "Invalid input_tensor shape. Only 2D or 3D images are supported."
+            )
 
     def compute_cam_per_layer(
-        self, input_tensor: torch.Tensor, targets: List[torch.nn.Module], eigen_smooth: bool
+        self,
+        input_tensor: torch.Tensor,
+        targets: List[torch.nn.Module],
+        eigen_smooth: bool,
     ) -> np.ndarray:
         if self.detach:
-            activations_list = [a.cpu().data.numpy() for a in self.activations_and_grads.activations]
-            grads_list = [g.cpu().data.numpy() for g in self.activations_and_grads.gradients]
+            activations_list = [
+                a.cpu().data.numpy() for a in self.activations_and_grads.activations
+            ]
+            grads_list = [
+                g.cpu().data.numpy() for g in self.activations_and_grads.gradients
+            ]
         else:
             activations_list = [a for a in self.activations_and_grads.activations]
             grads_list = [g for g in self.activations_and_grads.gradients]
@@ -161,7 +187,14 @@ class BaseCAM:
             if i < len(grads_list):
                 layer_grads = grads_list[i]
 
-            cam = self.get_cam_image(input_tensor, target_layer, targets, layer_activations, layer_grads, eigen_smooth)
+            cam = self.get_cam_image(
+                input_tensor,
+                target_layer,
+                targets,
+                layer_activations,
+                layer_grads,
+                eigen_smooth,
+            )
             cam = np.maximum(cam, 0)
             scaled = scale_cam_image(cam, target_size)
             cam_per_target_layer.append(scaled[:, None, :])
@@ -175,7 +208,10 @@ class BaseCAM:
         return scale_cam_image(result)
 
     def forward_augmentation_smoothing(
-        self, input_tensor: torch.Tensor, targets: List[torch.nn.Module], eigen_smooth: bool = False
+        self,
+        input_tensor: torch.Tensor,
+        targets: List[torch.nn.Module],
+        eigen_smooth: bool = False,
     ) -> np.ndarray:
         cams = []
         for transform in self.tta_transforms:
@@ -204,7 +240,9 @@ class BaseCAM:
     ) -> np.ndarray:
         # Smooth the CAM result with test time augmentation
         if aug_smooth is True:
-            return self.forward_augmentation_smoothing(input_tensor, targets, eigen_smooth)
+            return self.forward_augmentation_smoothing(
+                input_tensor, targets, eigen_smooth
+            )
 
         return self.forward(input_tensor, targets, eigen_smooth)
 
@@ -218,5 +256,7 @@ class BaseCAM:
         self.activations_and_grads.release()
         if isinstance(exc_value, IndexError):
             # Handle IndexError here...
-            print(f"An exception occurred in CAM with block: {exc_type}. Message: {exc_value}")
+            print(
+                f"An exception occurred in CAM with block: {exc_type}. Message: {exc_value}"
+            )
             return True

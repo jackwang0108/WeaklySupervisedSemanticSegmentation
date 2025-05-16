@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import torch
 import tqdm
-from pytorch_grad_cam.base_cam import BaseCAM
+from .base_cam import BaseCAM
 
 
 class AblationLayer(torch.nn.Module):
@@ -37,8 +37,7 @@ class AblationLayer(torch.nn.Module):
                 output[i, self.indices[i], :] = 0
             else:
                 ABLATION_VALUE = 1e5
-                output[i, self.indices[i], :] = torch.min(
-                    output) - ABLATION_VALUE
+                output[i, self.indices[i], :] = torch.min(output) - ABLATION_VALUE
 
         if self.reshape_transform is not None:
             output = output.transpose(2, 1)
@@ -57,28 +56,29 @@ def replace_layer_recursive(model, old_layer, new_layer):
 
 
 class AblationCAM(BaseCAM):
-    def __init__(self, model, target_layers,
-                 reshape_transform=None):
-        super(AblationCAM, self).__init__(model, target_layers, 
-                                          reshape_transform)
+    def __init__(self, model, target_layers, reshape_transform=None):
+        super(AblationCAM, self).__init__(model, target_layers, reshape_transform)
 
         if len(target_layers) > 1:
             print(
                 "Warning. You are usign Ablation CAM with more than 1 layers. "
-                "This is supported only if all layers have the same output shape")
+                "This is supported only if all layers have the same output shape"
+            )
 
     def set_ablation_layers(self):
         self.ablation_layers = []
         for target_layer in self.target_layers:
-            ablation_layer = AblationLayer(target_layer,
-                                           self.reshape_transform, indices=[])
+            ablation_layer = AblationLayer(
+                target_layer, self.reshape_transform, indices=[]
+            )
             self.ablation_layers.append(ablation_layer)
             replace_layer_recursive(self.model, target_layer, ablation_layer)
 
     def unset_ablation_layers(self):
         # replace the model back to the original state
         for ablation_layer, target_layer in zip(
-                self.ablation_layers, self.target_layers):
+            self.ablation_layers, self.target_layers
+        ):
             replace_layer_recursive(self.model, ablation_layer, target_layer)
 
     def set_ablation_layer_batch_indices(self, indices):
@@ -89,11 +89,7 @@ class AblationCAM(BaseCAM):
         for ablation_layer in self.ablation_layers:
             ablation_layer.indices = ablation_layer.indices[:keep]
 
-    def get_cam_weights(self,
-                        input_tensor,
-                        target_category,
-                        activations,
-                        grads):
+    def get_cam_weights(self, input_tensor, target_category, activations, grads):
         with torch.no_grad():
             outputs = self.model(input_tensor).cpu().numpy()
             original_scores = []
@@ -117,7 +113,8 @@ class AblationCAM(BaseCAM):
                 batch_tensor = tensor.repeat(BATCH_SIZE, 1, 1, 1)
                 for i in tqdm.tqdm(range(0, number_of_channels, BATCH_SIZE)):
                     self.set_ablation_layer_batch_indices(
-                        list(range(i, i + BATCH_SIZE)))
+                        list(range(i, i + BATCH_SIZE))
+                    )
 
                     if i + BATCH_SIZE > number_of_channels:
                         keep = number_of_channels - i

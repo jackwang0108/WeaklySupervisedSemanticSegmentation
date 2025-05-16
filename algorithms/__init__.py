@@ -30,7 +30,7 @@ install(word_wrap=True)
 ALGORITHMS_REGISTRY: dict[str, Type[WeaklySupervisedSemanticSegmentationAlgorithm]] = {}
 
 # 忽略的模块列表
-IGNORE_MODULES = ["GradCAM"]
+IGNORE_MODULES = ["pytorch_grad_cam"]
 
 
 def register_algorithm(algorithm_name: str, throw_warning: bool = False):

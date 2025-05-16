@@ -2,9 +2,9 @@ import numpy as np
 import torch
 import tqdm
 from typing import Callable, List
-from pytorch_grad_cam.base_cam import BaseCAM
-from pytorch_grad_cam.utils.find_layers import replace_layer_recursive
-from pytorch_grad_cam.ablation_layer import AblationLayer
+from .base_cam import BaseCAM
+from .utils.find_layers import replace_layer_recursive
+from .ablation_layer import AblationLayer
 
 
 """ Implementation of AblationCAM
@@ -25,33 +25,36 @@ The parameter ratio_channels_to_ablate controls how many channels should be abla
 
 
 class AblationCAM(BaseCAM):
-    def __init__(self,
-                 model: torch.nn.Module,
-                 target_layers: List[torch.nn.Module],
-                 reshape_transform: Callable = None,
-                 ablation_layer: torch.nn.Module = AblationLayer(),
-                 batch_size: int = 32,
-                 ratio_channels_to_ablate: float = 1.0) -> None:
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        target_layers: List[torch.nn.Module],
+        reshape_transform: Callable = None,
+        ablation_layer: torch.nn.Module = AblationLayer(),
+        batch_size: int = 32,
+        ratio_channels_to_ablate: float = 1.0,
+    ) -> None:
 
-        super(AblationCAM, self).__init__(model,
-                                          target_layers,
-                                          reshape_transform,
-                                          uses_gradients=False)
+        super(AblationCAM, self).__init__(
+            model, target_layers, reshape_transform, uses_gradients=False
+        )
         self.batch_size = batch_size
         self.ablation_layer = ablation_layer
         self.ratio_channels_to_ablate = ratio_channels_to_ablate
 
     def save_activation(self, module, input, output) -> None:
-        """ Helper function to save the raw activations from the target layer """
+        """Helper function to save the raw activations from the target layer"""
         self.activations = output
 
-    def assemble_ablation_scores(self,
-                                 new_scores: list,
-                                 original_score: float,
-                                 ablated_channels: np.ndarray,
-                                 number_of_channels: int) -> np.ndarray:
-        """ Take the value from the channels that were ablated,
-            and just set the original score for the channels that were skipped """
+    def assemble_ablation_scores(
+        self,
+        new_scores: list,
+        original_score: float,
+        ablated_channels: np.ndarray,
+        number_of_channels: int,
+    ) -> np.ndarray:
+        """Take the value from the channels that were ablated,
+        and just set the original score for the channels that were skipped"""
 
         index = 0
         result = []
@@ -69,12 +72,14 @@ class AblationCAM(BaseCAM):
 
         return result
 
-    def get_cam_weights(self,
-                        input_tensor: torch.Tensor,
-                        target_layer: torch.nn.Module,
-                        targets: List[Callable],
-                        activations: torch.Tensor,
-                        grads: torch.Tensor) -> np.ndarray:
+    def get_cam_weights(
+        self,
+        input_tensor: torch.Tensor,
+        target_layer: torch.nn.Module,
+        targets: List[Callable],
+        activations: torch.Tensor,
+        grads: torch.Tensor,
+    ) -> np.ndarray:
 
         # Do a forward pass, compute the target scores, and cache the
         # activations
@@ -83,10 +88,14 @@ class AblationCAM(BaseCAM):
             outputs = self.model(input_tensor)
             handle.remove()
             original_scores = np.float32(
-                [target(output).cpu().item() for target, output in zip(targets, outputs)])
+                [
+                    target(output).cpu().item()
+                    for target, output in zip(targets, outputs)
+                ]
+            )
 
         # Replace the layer with the ablation layer.
-        # When we finish, we will replace it back, so the 
+        # When we finish, we will replace it back, so the
         # original model is unchanged.
         ablation_layer = self.ablation_layer
         replace_layer_recursive(self.model, target_layer, ablation_layer)
@@ -96,8 +105,7 @@ class AblationCAM(BaseCAM):
         # This is a "gradient free" method, so we don't need gradients here.
         with torch.no_grad():
             # Loop over each of the batch images and ablate activations for it.
-            for batch_index, (target, tensor) in enumerate(
-                    zip(targets, input_tensor)):
+            for batch_index, (target, tensor) in enumerate(zip(targets, input_tensor)):
                 new_scores = []
                 batch_tensor = tensor.repeat(self.batch_size, 1, 1, 1)
 
@@ -105,35 +113,35 @@ class AblationCAM(BaseCAM):
                 # But we can also try to speed this up by using a low
                 # ratio_channels_to_ablate.
                 channels_to_ablate = ablation_layer.activations_to_be_ablated(
-                    activations[batch_index, :], self.ratio_channels_to_ablate)
+                    activations[batch_index, :], self.ratio_channels_to_ablate
+                )
                 number_channels_to_ablate = len(channels_to_ablate)
 
                 for i in tqdm.tqdm(
-                    range(
-                        0,
-                        number_channels_to_ablate,
-                        self.batch_size)):
+                    range(0, number_channels_to_ablate, self.batch_size)
+                ):
                     if i + self.batch_size > number_channels_to_ablate:
-                        batch_tensor = batch_tensor[:(
-                            number_channels_to_ablate - i)]
+                        batch_tensor = batch_tensor[: (number_channels_to_ablate - i)]
 
                     # Change the state of the ablation layer so it ablates the next channels.
                     # TBD: Move this into the ablation layer forward pass.
                     ablation_layer.set_next_batch(
-                        input_batch_index = batch_index,
-                        activations = self.activations,
-                        num_channels_to_ablate = batch_tensor.size(0))
-                    score = [target(o).cpu().item()
-                             for o in self.model(batch_tensor)]
+                        input_batch_index=batch_index,
+                        activations=self.activations,
+                        num_channels_to_ablate=batch_tensor.size(0),
+                    )
+                    score = [target(o).cpu().item() for o in self.model(batch_tensor)]
                     new_scores.extend(score)
-                    ablation_layer.indices = ablation_layer.indices[batch_tensor.size(
-                        0):]
+                    ablation_layer.indices = ablation_layer.indices[
+                        batch_tensor.size(0) :
+                    ]
 
                 new_scores = self.assemble_ablation_scores(
                     new_scores,
                     original_scores[batch_index],
                     channels_to_ablate,
-                    number_of_channels)
+                    number_of_channels,
+                )
                 weights.extend(new_scores)
 
         weights = np.float32(weights)
