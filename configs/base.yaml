@@ -17,21 +17,118 @@ algorithm:
 
 data:
     root: "./data"
-    dataset: "voc"
     dataset_using: "???"
     available_datasets:
-        - "voc"
-        - "coco"
-    dtype: "float32"
-    # 计算出来的数据集的均值和标准差
-    # 参考 datasets/statistics.py
-    dataset_statistics:
         voc:
             mean: [0.4573, 0.4373, 0.4045]
             std: [0.2675, 0.2643, 0.2780]
+            classnames:
+                - aeroplane
+                - bicycle
+                - bird
+                - boat
+                - bottle
+                - bus
+                - car
+                - cat
+                - chair
+                - cow
+                - diningtable
+                - dog
+                - horse
+                - motorbike
+                - person
+                - pottedplant
+                - sheep
+                - sofa
+                - train
+                - tvmonitor
         coco:
             mean: [0.4712, 0.4474, 0.4077]
             std: [0.2700, 0.2655, 0.2808]
+            classnames:
+                - person
+                - bicycle
+                - car
+                - motorbike
+                - aeroplane
+                - bus
+                - train
+                - truck
+                - boat
+                - traffic light
+                - fire hydrant
+                - stop sign
+                - parking meter
+                - bench
+                - bird
+                - cat
+                - dog
+                - horse
+                - sheep
+                - cow
+                - elephant
+                - bear
+                - zebra
+                - giraffe
+                - backpack
+                - umbrella
+                - handbag
+                - tie
+                - suitcase
+                - frisbee
+                - skis
+                - snowboard
+                - sports ball
+                - kite
+                - baseball bat
+                - baseball glove
+                - skateboard
+                - surfboard
+                - tennis racket
+                - bottle
+                - wine glass
+                - cup
+                - fork
+                - knife
+                - spoon
+                - bowl
+                - banana
+                - apple
+                - sandwich
+                - orange
+                - broccoli
+                - carrot
+                - hot dog
+                - pizza
+                - donut
+                - cake
+                - chair
+                - sofa
+                - pottedplant
+                - bed
+                - diningtable
+                - toilet
+                - tvmonitor
+                - laptop
+                - mouse
+                - remote
+                - keyboard
+                - cell phone
+                - microwave
+                - oven
+                - toaster
+                - sink
+                - refrigerator
+                - book
+                - clock
+                - vase
+                - scissors
+                - teddy bear
+                - hair drier
+                - toothbrush
+
+    dtype: "float32"
 
 val:
     # dataloader设置
@@ -45,7 +142,7 @@ val:
         - name: "ToTensor"
         - name: "Resize"
           params:
-              size: [256, 256]
+              size: [224, 224]
         - name: "Normalize"
           params:
               mean: [0.4573, 0.4373, 0.4045]
@@ -71,9 +168,9 @@ train:
     # 数据增强设置
     transform:
         - name: "ToTensor"
-        - name: "Resize"
+        - name: "RandomResizedCrop"
           params:
-              size: [256, 256]
+              size: [224, 224]
         - name: "RandomHorizontalFlip"
           params:
               p: 0.5
