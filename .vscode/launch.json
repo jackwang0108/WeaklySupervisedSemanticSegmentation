@@ -5,11 +5,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python 调试程序: algorithm.算法 模块",
+            "name": "Python 调试程序: algorithm.算法.模块",
             "type": "debugpy",
             "request": "launch",
-            "module": "algorithms.${fileDirnameBasename}.${fileBasenameNoExtension}",
-            "justMyCode": false
+            "module": "algorithms.${input:pickAlgo}.${input:pickAlgoModule}",
+            "justMyCode": true
         },
         {
             "name": "Python 调试程序: src.train",
@@ -18,8 +18,7 @@
             "module": "src.train",
             "args": [
                 "-c",
-                "${workspaceFolder}/configs/EXAMPLE.yaml",
-                "train.lr=0.001",
+                "${workspaceFolder}/configs/${input:pickConfig}.yaml",
             ],
             "justMyCode": true
         },
@@ -43,6 +42,41 @@
             "request": "launch",
             "module": "datasets.${fileBasenameNoExtension}",
             "justMyCode": false
+        }
+    ],
+    "inputs": [
+        {
+            "id": "pickAlgo",
+            "type": "command",
+            "command": "shellCommand.execute",
+            "args": {
+                "command": "for dir in $(\\ls -F algorithms | grep -v '^__' | grep -e '/$'); do basename $dir; done",
+                "cwd": "${workspaceFolder}",
+                "rememberAs": "AlgoName",
+                "rememberPrevious": true,
+            },
+        },
+        {
+            "id": "pickAlgoModule",
+            "type": "command",
+            "command": "shellCommand.execute",
+            "args": {
+                "command": "for file in $(\\ls algorithms/${input:pickAlgo}/*.py | grep -v '^__'); do basename $file .py; done",
+                "cwd": "${workspaceFolder}",
+                "rememberAs": "AlgoModule",
+                "rememberPrevious": true,
+            }
+        },
+        {
+            "id": "pickConfig",
+            "type": "command",
+            "command": "shellCommand.execute",
+            "args": {
+                "command": "for file in $(\\ls configs/*.yaml | grep -v '^__'); do basename $file .yaml; done",
+                "cwd": "${workspaceFolder}",
+                "rememberAs": "ConfigName",
+                "rememberPrevious": true,
+            }
         }
     ]
 }
