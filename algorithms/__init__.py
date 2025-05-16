@@ -12,6 +12,7 @@ __init__.py 对algorithms模块进行初始化
 import pkgutil
 import importlib
 from pathlib import Path
+from warnings import warn
 from typing import Literal, Type
 
 # Third-Party Library
@@ -28,13 +29,19 @@ install(word_wrap=True)
 # 注册算法的字典
 ALGORITHMS_REGISTRY: dict[str, Type[WeaklySupervisedSemanticSegmentationAlgorithm]] = {}
 
+# 忽略的模块列表
+IGNORE_MODULES = ["GradCAM"]
 
-def register_algorithm(algorithm_name: str):
+
+def register_algorithm(algorithm_name: str, throw_warning: bool = False):
     """注册算法的装饰器"""
 
     def decorator(cls):
         if algorithm_name in ALGORITHMS_REGISTRY:
-            raise ValueError(f"Algorithm {algorithm_name} already registered.")
+            if throw_warning:
+                warn(f"Warning: Algorithm {algorithm_name} is already registered.")
+            else:
+                raise ValueError(f"Algorithm {algorithm_name} already registered.")
         ALGORITHMS_REGISTRY[algorithm_name] = cls
         cls.algorithm_name = algorithm_name
         return cls
@@ -46,7 +53,11 @@ def _auto_discover_algorithms():
     """自动发现所有算法"""
     package_path = Path(__file__).parent
     for _, module_name, _ in pkgutil.iter_modules([str(package_path)]):
-        if module_name.startswith("_") or module_name == "base":
+        if (
+            module_name.startswith("_")
+            or module_name == "base"
+            or module_name in IGNORE_MODULES
+        ):
             continue
 
         try:

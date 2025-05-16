@@ -9,7 +9,7 @@ base.py 定义了算法的抽象基类, 所有算法都需要继承这个类
 """
 
 # Standard Library
-from typing import Any
+from typing import Any, Literal
 from abc import ABC, abstractmethod
 
 # Third-Party Library
@@ -43,7 +43,9 @@ class WeaklySupervisedSemanticSegmentationAlgorithm(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def train_step(self, data: tuple[torch.Tensor], epoch: int, batch: int) -> dict:
+    def train_step(
+        self, data: tuple[torch.Tensor], epoch: int, batch: int
+    ) -> dict[Literal["loss"] | str, torch.Tensor | Any]:
         raise NotImplementedError
 
     @abstractmethod
