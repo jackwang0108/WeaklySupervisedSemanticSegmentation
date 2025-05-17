@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Callable, List, Optional, Tuple
 
 import numpy as np
@@ -28,7 +29,7 @@ class BaseCAM:
         self.device = next(self.model.parameters()).device
         if "hpu" in str(self.device):
             try:
-                import habana_frameworks.torch.core as htcore
+                import habana_frameworks.torch.core as htcore  # type: ignore
             except ImportError as error:
                 error.msg = (
                     f"Could not import habana_frameworks.torch.core. {error.msg}."
@@ -65,7 +66,7 @@ class BaseCAM:
         activations: torch.Tensor,
         grads: torch.Tensor,
     ) -> np.ndarray:
-        raise Exception("Not Implemented")
+        raise NotImplementedError("Not Implemented")
 
     def get_cam_image(
         self,
@@ -90,18 +91,22 @@ class BaseCAM:
         else:
             raise ValueError(f"Invalid activation shape. Get {len(activations.shape)}.")
 
-        if eigen_smooth:
-            cam = get_2d_projection(weighted_activations)
-        else:
-            cam = weighted_activations.sum(axis=1)
-        return cam
+        return (
+            get_2d_projection(weighted_activations)
+            if eigen_smooth
+            else weighted_activations.sum(axis=1)
+        )
 
     def forward(
         self,
-        input_tensor: torch.Tensor,
+        input_tensor: torch.Tensor | tuple[torch.Tensor, int, int],
         targets: List[torch.nn.Module],
         eigen_smooth: bool = False,
     ) -> np.ndarray:
+        self.device = next(self.model.parameters()).device
+
+        if isinstance(input_tensor, Sequence):
+            input_tensor, h, w = input_tensor
         input_tensor = input_tensor.to(self.device)
 
         if self.compute_input_gradient:
@@ -117,7 +122,7 @@ class BaseCAM:
 
         if self.uses_gradients:
             self.model.zero_grad()
-            loss = sum([target(output) for target, output in zip(targets, outputs)])
+            loss = sum(target(output) for target, output in zip(targets, outputs))
             if self.detach:
                 loss.backward(retain_graph=True)
             else:
@@ -139,11 +144,17 @@ class BaseCAM:
         # This gives you more flexibility in case you just want to
         # use all conv layers for example, all Batchnorm layers,
         # or something else.
-        cam_per_layer = self.compute_cam_per_layer(input_tensor, targets, eigen_smooth)
+        cam_per_layer = self.compute_cam_per_layer(
+            [input_tensor, h, w], targets, eigen_smooth
+        )
         return self.aggregate_multi_layers(cam_per_layer)
 
-    def get_target_width_height(self, input_tensor: torch.Tensor) -> Tuple[int, int]:
-        if len(input_tensor.shape) == 4:
+    def get_target_width_height(
+        self, input_tensor: torch.Tensor | tuple[torch.Tensor, int, int]
+    ) -> Tuple[int, int]:
+        if isinstance(input_tensor, Sequence):
+            return input_tensor[-2:]
+        elif len(input_tensor.shape) == 4:
             width, height = input_tensor.size(-1), input_tensor.size(-2)
             return width, height
         elif len(input_tensor.shape) == 5:
@@ -160,7 +171,7 @@ class BaseCAM:
 
     def compute_cam_per_layer(
         self,
-        input_tensor: torch.Tensor,
+        input_tensor: torch.Tensor | Tuple[torch.Tensor, int, int],
         targets: List[torch.nn.Module],
         eigen_smooth: bool,
     ) -> np.ndarray:
@@ -172,8 +183,8 @@ class BaseCAM:
                 g.cpu().data.numpy() for g in self.activations_and_grads.gradients
             ]
         else:
-            activations_list = [a for a in self.activations_and_grads.activations]
-            grads_list = [g for g in self.activations_and_grads.gradients]
+            activations_list = list(self.activations_and_grads.activations)
+            grads_list = list(self.activations_and_grads.gradients)
         target_size = self.get_target_width_height(input_tensor)
 
         cam_per_target_layer = []
@@ -187,6 +198,7 @@ class BaseCAM:
             if i < len(grads_list):
                 layer_grads = grads_list[i]
 
+            # Grad CAM的核心计算函数, 论文里的公式实现就在这个函数内部
             cam = self.get_cam_image(
                 input_tensor,
                 target_layer,
@@ -195,6 +207,8 @@ class BaseCAM:
                 layer_grads,
                 eigen_smooth,
             )
+
+            # ReLU
             cam = np.maximum(cam, 0)
             scaled = scale_cam_image(cam, target_size)
             cam_per_target_layer.append(scaled[:, None, :])
@@ -228,8 +242,7 @@ class BaseCAM:
             cam = cam[:, 0, :, :]
             cams.append(cam)
 
-        cam = np.mean(np.float32(cams), axis=0)
-        return cam
+        return np.mean(np.float32(cams), axis=0)
 
     def __call__(
         self,
@@ -239,7 +252,7 @@ class BaseCAM:
         eigen_smooth: bool = False,
     ) -> np.ndarray:
         # Smooth the CAM result with test time augmentation
-        if aug_smooth is True:
+        if aug_smooth:
             return self.forward_augmentation_smoothing(
                 input_tensor, targets, eigen_smooth
             )
