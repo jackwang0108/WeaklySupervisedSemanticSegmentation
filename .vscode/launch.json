@@ -27,7 +27,7 @@
                 "${workspaceFolder}/configs/${input:pickConfig}.yaml",
                 "train.dataloader.batch_size=2"
             ],
-            "justMyCode": true
+            "justMyCode": false
         },
         {
             "name": "Python 调试程序: config 模块",
@@ -39,11 +39,7 @@
             "name": "Python 调试程序: 当前文件",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/${input:selectFile}",
-            "args": [
-                "--lr",
-                "${input:lr}"
-            ],
+            "program": "${workspaceFolder}/${fileBasename}",
             "console": "integratedTerminal",
             "justMyCode": false
         },
