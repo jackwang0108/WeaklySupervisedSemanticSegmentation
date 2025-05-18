@@ -211,7 +211,7 @@ class RichuruLogger:
         self.footer_table.add_column(justify="center", ratio=1)
 
         self.info_panel = Panel(
-            Text("information will be displayed here"),
+            Text("Loading Data..."),
             title="Information",
             border_style="green",
         )
