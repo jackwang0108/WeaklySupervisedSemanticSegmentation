@@ -15,7 +15,6 @@ echo "Extracting PASCAL VOC 2012 dataset..."
 tar -xf "${VOC_DIR}/VOCtrainval_11-May-2012.tar" -C "${VOC_DIR}"
 
 echo "Downloading PASCAL VOC 2012 augmented annotations by SBD dataset"
-echo "Downloading PASCAL VOC 2012 augmented annotations..."
 wget -c -q --show-progress --no-check-certificate \
     -O "${VOC_DIR}/SegmentationClassAug.zip" \
     "https://www.dropbox.com/s/oeu149j8qtbs1x0/SegmentationClassAug.zip?dl=1"
