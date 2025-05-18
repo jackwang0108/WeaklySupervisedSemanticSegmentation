@@ -274,7 +274,7 @@ class WeCLIPModel(nn.Module):
         self.feature_dim = feature_dim
         self.num_classes = num_classes
 
-        self.clip: CLIP = clip.load(backbone)[0]
+        self.clip: CLIP = clip.load(backbone, device="cpu")[0]
         self.clip.eval()
         for param in self.clip.parameters():
             param.requires_grad = False
