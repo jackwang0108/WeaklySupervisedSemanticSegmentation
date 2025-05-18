@@ -260,7 +260,10 @@ class BaseCAM:
         return self.forward(input_tensor, targets, eigen_smooth)
 
     def __del__(self):
-        self.activations_and_grads.release()
+        try:
+            self.activations_and_grads.release()
+        except AttributeError:
+            pass
 
     def __enter__(self):
         return self
