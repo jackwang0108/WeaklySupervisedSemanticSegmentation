@@ -113,6 +113,10 @@ class COCO2014WSSSDataset(COCO2014Dataset):
             transform if transform is not None else Compose([ToTensor(), Resize(256)])
         )
 
+        self.original_transform = Compose(
+            [i for i in self.transform.transforms if not i._change_image_color]
+        )
+
     def __repr__(self):
         format_string = f"{self.__class__.__name__}("
         format_string += f"\n    root={self.root},"
@@ -151,16 +155,48 @@ class COCO2014WSSSDataset(COCO2014Dataset):
             instance_mask = self.coco.annToMask(annotation)
             semantic_mask = np.where(instance_mask, label, semantic_mask)
 
-        image, semantic_mask = self.transform((image, semantic_mask))
+        original_image, _ = self.original_transform((image, semantic_mask))
+        augmented_image, augmented_semantic_mask = self.transform(
+            (image, semantic_mask)
+        )
 
-        return image, semantic_mask, self.get_weakly_supervision_label(semantic_mask)
+        return (
+            original_image,
+            augmented_image,
+            augmented_semantic_mask,
+            self.get_weakly_supervision_label(augmented_semantic_mask),
+        )
 
 
 if __name__ == "__main__":
     from torch.utils.data import DataLoader
+    from .transforms import *
 
-    ds = COCO2014WSSSDataset(split="val")
+    t = Compose(
+        [
+            ToTensor(),
+            RandomResizedCrop(224),
+            RandomHorizontalFlip(),
+            ColorJitter(0.2, 0.2, 0.2, 0.1),
+            Normalize(
+                [0.4573, 0.4373, 0.4045],
+                [0.2675, 0.2643, 0.2780],
+            ),
+        ]
+    )
+
+    ds = COCO2014WSSSDataset(split="val", transform=t)
 
     loader = DataLoader(ds, 32, True, num_workers=1)
-    image, label, weak_label = next(iter(loader))
-    print(image.shape, label.shape, weak_label.shape)
+    original, images, labels, weak_labels = next(iter(loader))
+
+    rgb_visualizer = ToPILImage("RGB")
+    mask_visualizer = Compose(
+        [
+            ToDtype(torch.uint8),
+            ToPILImage("L"),
+        ]
+    )
+
+    rgb_visualizer(original[0]).show()
+    rgb_visualizer(images[0]).show()

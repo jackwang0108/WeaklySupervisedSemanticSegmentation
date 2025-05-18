@@ -76,12 +76,16 @@ class VOC2012WSSSDataset(VOC2012Dataset):
         self,
         root: Optional[Path] = None,
         split: Optional[Literal["train", "val", "train_aug"]] = "train_aug",
-        transform: Optional[Callable] = None,
+        transform: Optional[Compose] = None,
     ):
         super().__init__(root, split)
 
         self.transform = (
             transform if transform is not None else Compose([ToTensor(), Resize(256)])
+        )
+
+        self.original_transform = Compose(
+            [i for i in self.transform.transforms if not i._change_image_color]
         )
 
     def __repr__(self):
@@ -109,23 +113,53 @@ class VOC2012WSSSDataset(VOC2012Dataset):
 
     def __getitem__(
         self, index: int
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Note:
             语义分割的label, 即segmentation mask, 是一个二维的Tensor. 其中的0表示背景类, 物体类的label是从1开始的
         """
         name, image, label = super().__getitem__(index)
-        image, label = self.transform((image, label))
 
-        return image, label, self.get_weakly_supervision_label(label)
+        original_image, _ = self.original_transform((image, label))
+        augmented_image, augmented_label = self.transform((image, label))
+
+        return (
+            original_image,
+            augmented_image,
+            augmented_label,
+            self.get_weakly_supervision_label(augmented_label),
+        )
 
 
 if __name__ == "__main__":
     from torch.utils.data import DataLoader
+    from .transforms import *
 
-    ds = VOC2012WSSSDataset(split="val")
-    print(ds)
+    t = Compose(
+        [
+            ToTensor(),
+            RandomResizedCrop(224),
+            RandomHorizontalFlip(),
+            ColorJitter(0.2, 0.2, 0.2, 0.1),
+            Normalize(
+                [0.4573, 0.4373, 0.4045],
+                [0.2675, 0.2643, 0.2780],
+            ),
+        ]
+    )
+
+    ds = VOC2012WSSSDataset(split="val", transform=t)
 
     loader = DataLoader(ds, 32, True, num_workers=1)
-    images, labels, weak_labels = next(iter(loader))
-    print(images.shape, labels.shape, weak_labels.shape)
+    original, images, labels, weak_labels = next(iter(loader))
+
+    rgb_visualizer = ToPILImage("RGB")
+    mask_visualizer = Compose(
+        [
+            ToDtype(torch.uint8),
+            ToPILImage("L"),
+        ]
+    )
+
+    rgb_visualizer(original[0]).show()
+    rgb_visualizer(images[0]).show()

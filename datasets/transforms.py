@@ -51,6 +51,8 @@ def apply_all(x: Any | Sequence[Any], func: Callable) -> Any | Sequence[Any]:
 
 
 class Transform(ABC):
+    _change_image_color: bool = False
+
     @abstractmethod
     def __call__(self, x: Any) -> Any:
         pass
@@ -61,7 +63,7 @@ class Transform(ABC):
 
 
 class Compose(Transform):
-    def __init__(self, transforms: Sequence[Callable]):
+    def __init__(self, transforms: Sequence[Transform]):
         self.transforms = transforms
 
     def __call__(
@@ -356,6 +358,8 @@ class ColorJitter(Transform):
 
     from torchvision.transforms import ColorJitter as _ColorJitter
 
+    _change_image_color: bool = True
+
     def __init__(
         self,
         brightness: float | tuple[float, float] = 0,
@@ -385,6 +389,8 @@ class Normalize(Transform):
 
     因此, 后序需要使用Normalize() 将0~1的像素分布转换为均值为0, 方差为1的分布
     """
+
+    _change_image_color: bool = True
 
     def __init__(self, mean: Sequence[float], std: Sequence[float]):
         self.mean = torch.tensor(mean)
