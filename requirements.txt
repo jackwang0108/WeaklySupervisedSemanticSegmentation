@@ -5,7 +5,7 @@ matplotlib==3.10.3
 numpy==2.2.5
 omegaconf==2.3.0
 openai==1.79.0
-opencv_python==4.9.0.80
+opencv_python==4.11.0.86
 packaging==25.0
 Pillow==11.2.1
 pycocotools==2.0.8
@@ -17,3 +17,5 @@ torch==2.7.0
 torchvision==0.22.0
 tqdm==4.65.0
 ttach==0.0.3
+tensorboard
+torch-tb-profiler
