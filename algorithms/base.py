@@ -44,7 +44,7 @@ class WeaklySupervisedSemanticSegmentationAlgorithm(ABC):
 
     @abstractmethod
     def train_step(
-        self, data: tuple[torch.Tensor], epoch: int, batch: int
+        self, data: list[torch.Tensor], epoch: int, batch: int
     ) -> dict[Literal["loss"] | str, torch.Tensor | Any]:
         raise NotImplementedError
 
