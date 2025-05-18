@@ -44,12 +44,13 @@ class WeaklySupervisedSemanticSegmentationAlgorithm(ABC):
 
     @abstractmethod
     def train_step(
-        self, data: list[torch.Tensor], epoch: int, batch: int
+        self, data: list[torch.Tensor], epoch: int, batch: int, num_batches: int
     ) -> dict[Literal["loss"] | str, torch.Tensor | Any]:
         raise NotImplementedError
 
     @abstractmethod
     def predict(self, image):
+        """返回分割结果, 形状必须是 [B, H, W]"""
         raise NotImplementedError
 
     @abstractmethod
