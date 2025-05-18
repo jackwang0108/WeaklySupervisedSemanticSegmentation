@@ -9,6 +9,7 @@ model.py 定义了WeCLIP算法 (Frozen CLIP: A Strong Backbone for Weakly Superv
 """
 
 # Standard Library
+from copy import deepcopy
 from typing import Optional
 from collections import OrderedDict
 from collections.abc import Callable
@@ -22,7 +23,9 @@ import torch.nn as nn
 
 # My Library
 from . import clip
-from .clip.model import CLIP
+from ..pytorch_grad_cam import GradCAM
+from .clip.model import CLIP, VisionTransformer
+from ..pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
 
 class MLP(nn.Module):
@@ -212,8 +215,51 @@ class FeatureDecoder(nn.Module):
         return fused_feature_map, self.linear_projection(feature_map)
 
 
+class CLIPClassifier(nn.Module):
+    """
+    GradCAM是根据最终计算得到的Classification Logits反向传播计算的, 因此需要构建一个使用CLIP的Vision Encoder作为特征提取器的分类器
+
+    同时需要注意, 因为要计算GradCAM, 所以分类器必须是可训练的, 不能是冻结的, 因此deepcopy一份出来
+    """
+
+    def __init__(
+        self, feature_extractor: VisionTransformer, classifier_weights: torch.Tensor
+    ):
+        super().__init__()
+
+        self.feature_extractor = deepcopy(feature_extractor)
+        self.feature_extractor.train()
+        for param in self.feature_extractor.parameters():
+            param.requires_grad = True
+
+        self.classifier = nn.Linear(*classifier_weights.T.shape, bias=False)
+        self.classifier.weight.data.copy_(classifier_weights)
+
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
+        image_feature, _, _ = self.feature_extractor(image)
+        logits: torch.Tensor = self.classifier(image_feature)
+        return logits.softmax(dim=-1)
+
+
+class CLIPOutputTarget:
+    def __init__(self, category: int):
+        self.category = category
+
+    def __call__(self, model_output: torch.Tensor) -> torch.Tensor:
+        if len(model_output.shape) == 1:
+            return model_output[self.category]
+        return model_output[:, self.category]
+
+
 class WeCLIPModel(nn.Module):
-    def __init__(self, backbone: str, feature_dim: int = 256, num_classes: int = 21):
+    def __init__(
+        self,
+        backbone: str,
+        background_labels: list[str],
+        foreground_labels: list[str],
+        feature_dim: int = 256,
+        num_classes: int = 21,
+    ):
         """
         WeCLIP算法中的网络模型
 
@@ -229,6 +275,9 @@ class WeCLIPModel(nn.Module):
         self.num_classes = num_classes
 
         self.clip: CLIP = clip.load(backbone)[0]
+        self.clip.eval()
+        for param in self.clip.parameters():
+            param.requires_grad = False
 
         self.patch_size = [
             self.clip.image_resolution // self.clip.vision_patch_size
@@ -243,12 +292,49 @@ class WeCLIPModel(nn.Module):
             num_features=self.clip.vision_layers,
         )
 
+        self.background_labels = background_labels
+        self.foreground_labels = foreground_labels
+        self.clip_classifier = CLIPClassifier(
+            self.clip.visual,
+            torch.cat(
+                [self.encode_text(i) for i in [foreground_labels, background_labels]],
+                dim=0,
+            ),
+        )
+
+        self.gradcam = GradCAM(
+            model=self.clip_classifier,
+            target_layers=[
+                self.clip_classifier.feature_extractor.transformer.resblocks[-1].ln_1
+            ],
+            reshape_transform=self.reshape,
+        )
+
+    def reshape(self, x: torch.Tensor) -> torch.Tensor:
+        return x[1:, :, :].permute(1, 2, 0).reshape(x.shape[1], -1, *self.patch_size)
+
+    def get_gradcams(self, image: torch.Tensor) -> torch.Tensor:
+        # [B, num_classes - 1, h, w], -1 是因为GradCAM计算的时候不计算背景类的GradCAM
+        # 具体来说是对背景类进行了拆分, 用背景类中的多个物体来表示背景类, 该方法源自 CLIP-ES Fig.3 下面的那段话
+        return torch.stack(
+            [
+                torch.from_numpy(
+                    self.gradcam(
+                        [image, *self.patch_size],
+                        [CLIPOutputTarget(category=i)],
+                    )
+                )
+                for i, _ in enumerate(self.foreground_labels)
+            ],
+            dim=1,
+        ).to(image.device, image.dtype)
+
     def forward(
         self, image: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         # image: [B, 3, 224, 224]
         # feature_map: [B, num_layer, h, w, feature_dim]
-        _, feature_map, attention_maps = self.encode_image(image)
+        image_feature, feature_map, attention_maps = self.encode_image(image)
 
         # fused_feature_map: [B, h, w, feature_dim]
         # prediction_mask: [B, num_classes, h, w]
@@ -260,9 +346,11 @@ class WeCLIPModel(nn.Module):
             fused_feature_map @ fused_feature_map.transpose(-2, -1)
         ).sigmoid()
 
+        # image_feature: [B, 512]
         # affinity map: [B, h * w, h * w]
+        # prediction_mask: [B, num_classes, h, w]
         # attention maps: [B, num_layer, h * w, h * w]
-        return affinity_map, prediction_mask, attention_maps
+        return image_feature, affinity_map, prediction_mask, attention_maps
 
     @property
     def dtype(self) -> torch.dtype:
@@ -272,8 +360,9 @@ class WeCLIPModel(nn.Module):
     def device(self) -> torch.device:
         return next(self.parameters()).device
 
-    @torch.no_grad()
-    def encode_image(self, image: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def encode_image(
+        self, image: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         image_feature: torch.Tensor  # [B, 512]
         patch_feature: torch.Tensor  # [B, num_layer, num_patches + 1, token_dim]
         attention_maps: torch.Tensor  # [B, num_layer, num_patches + 1, num_patches + 1]

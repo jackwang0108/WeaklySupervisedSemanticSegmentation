@@ -329,7 +329,7 @@ class CustomTransformer(nn.Module):
         self.heads = heads
         self.layers = layers
 
-        self.resblocks = TracingSequential(
+        self.resblocks: list[ResidualAttentionBlock] = TracingSequential(
             *[
                 ResidualAttentionBlock(width, heads, attn_mask, True)
                 for _ in range(layers)
@@ -548,6 +548,10 @@ class CLIP(nn.Module):
     @property
     def dtype(self):
         return self.visual.conv1.weight.dtype
+
+    @property
+    def device(self):
+        return self.visual.conv1.weight.device
 
     def encode_image(
         self, image: torch.Tensor
