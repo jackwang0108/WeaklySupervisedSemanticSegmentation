@@ -248,9 +248,18 @@ class RichuruLogger:
         )
         return self.progress
 
-    def make_info_table(self, info_dict: dict[str, float]) -> Table:
+    def make_info_table(
+        self,
+        info_dict: dict[str, float],
+        num_rows: Optional[int] = 3,
+        info_per_row: Optional[int] = None,
+    ) -> Table:
         table = Table.grid(expand=True)
-        info_per_row = math.ceil(len(info_dict) / 3)
+        info_per_row = (
+            math.ceil(len(info_dict) / num_rows)
+            if info_per_row is None
+            else info_per_row
+        )
 
         for col_idx in range(info_per_row * 2):
             table.add_column(justify="left" if col_idx % 2 == 0 else "center", ratio=1)

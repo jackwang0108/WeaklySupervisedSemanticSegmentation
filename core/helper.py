@@ -35,6 +35,21 @@ from datasets.voc import VOC2012WSSSDataset
 from datasets.coco import COCO2014WSSSDataset
 
 
+class AverageMeter:
+    def __init__(self, smoothing=0.0):
+        self.count = 0
+        self.average = 0.0
+        self.smoothing = smoothing
+
+    def update(self, value, count=1):
+        self.count += count
+        alpha = max(count / self.count, self.smoothing)
+        self.average = self.average * (1.0 - alpha) + value * alpha
+
+    def get(self):
+        return 0.0 if self.count == 0 else self.average
+
+
 def get_freer_gpu() -> int:
     """获取空闲的GPU设备ID"""
     os.system("nvidia-smi -q -d Memory |grep -A4 GPU | grep Used >tmp")
@@ -155,3 +170,60 @@ def get_scheduler(
     return getattr(optim.lr_scheduler, scheduler_config.name)(
         optimizer, **scheduler_config.params
     )
+
+
+def to_one_hot(
+    mask: torch.Tensor, num_classes: int, ignore_index: int
+) -> torch.LongTensor:
+    """将分割掩码转换为one-hot编码"""
+    batch, height, width = mask.size()
+    one_hot = torch.zeros(
+        (batch, num_classes, height, width),
+        dtype=torch.float32,
+        device=mask.device,
+    )
+    # 忽略无效区域
+    invalid_removed_mask = mask.clone().unsqueeze(dim=1)
+    invalid_removed_mask[torch.where(invalid_removed_mask == ignore_index)] = 0
+    one_hot.scatter_(1, invalid_removed_mask.long(), 1.0).long()
+    return one_hot
+
+
+def fast_intersection_and_union(
+    prediction_mask: torch.Tensor,
+    ground_truth_mask: torch.Tensor,
+    num_classes: int,
+    ignore_index: int = 255,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    fast_intersection_and_union 快速计算IoU和交集
+    计算分割掩码的交集和并集, 用于评估模型性能
+
+    Args:
+        pred_mask (torch.Tensor): 预测掩码
+        gt_mask (torch.Tensor): 真实掩码
+        num_classes (int): 类别数
+        ignore_index (int, optional): 无效像素值. Defaults to 255.
+
+    Returns:
+        tuple[torch.Tensor, torch.Tensor, torch.Tensor]: 并集, 交集, 真实掩码
+        交集, 并集, 真实掩码
+    """
+    # pred_mask: [B, H, W] --> [B, num_classes, H, W]
+    prediction_mask = to_one_hot(prediction_mask, num_classes, ignore_index)
+
+    # valid_pixels: [B, H, W] --> [B, 1, H, W]
+    valid_pixels = ground_truth_mask.unsqueeze(dim=1) != ignore_index
+
+    # gt_mask: [B, H, W] --> [B, num_classes, H, W]
+    ground_truth_mask = to_one_hot(ground_truth_mask, num_classes, ignore_index)
+
+    area_intersection = (prediction_mask * ground_truth_mask * valid_pixels).sum(
+        dim=(-2, -1)
+    )
+
+    area_pred = (prediction_mask * valid_pixels).sum(dim=(-2, -1))
+    area_gt = (ground_truth_mask * valid_pixels).sum(dim=(-2, -1))
+    are_union = area_pred + area_gt - area_intersection
+
+    return area_intersection, are_union, area_gt

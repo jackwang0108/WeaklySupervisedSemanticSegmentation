@@ -9,8 +9,7 @@ trainer.py 定义通用的训练器类
 """
 
 # Standard Library
-import copy
-import random
+import math
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Optional
@@ -33,6 +32,8 @@ from .helper import (
     get_optimizer,
     get_scheduler,
     get_transforms,
+    fast_intersection_and_union,
+    AverageMeter,
 )
 from .logger import RichuruLogger
 
@@ -48,8 +49,7 @@ class Trainer:
 
         self.epoch = 0
         self.best_epoch = 0
-        self.best_metrics: dict[str, float] = {"mIoU": 0.0}
-        self.best_losses: dict[str, float] = {"val_loss": float("inf")}
+        self.best_metrics: dict[str, float | dict[str, float]] = {"mIoU": 0.0}
 
         self.device = get_device()
         self.dtype = get_dtype(config.data.dtype)
@@ -139,7 +139,6 @@ class Trainer:
         self.epoch = checkpoint["epoch"]
         self.kwargs = checkpoint["kwargs"]
         self.best_epoch = checkpoint["best_epoch"]
-        self.best_losses |= checkpoint["best_losses"]
         self.best_metrics |= checkpoint["best_metrics"]
 
     def save_checkpoint(
@@ -158,7 +157,6 @@ class Trainer:
             "scheduler": self.scheduler.state_dict(),
             "epoch": self.epoch,
             "best_epoch": self.best_epoch,
-            "best_losses": self.best_losses,
             "best_metrics": self.best_metrics,
             "kwargs": self.kwargs,
         }
@@ -194,17 +192,17 @@ class Trainer:
         OmegaConf.save(self.config, save_path)
 
     def get_model_state_dict(self):
-        self.algorithm.model.to("cpu")
-        model = copy.deepcopy(self.algorithm.model)
-        self.algorithm.model.to(self.device)
-        return model.state_dict()
+        return self.algorithm.model.state_dict()
 
     def train_epoch(self):
+        loss_meter = AverageMeter()
         for batch_idx, batch_data in enumerate(self.train_loader):
             batch_data = to(batch_data, self.dtype, self.device)
 
             self.optimizer.zero_grad()
-            returns = self.algorithm.train_step(batch_data, self.epoch, batch_idx)
+            returns = self.algorithm.train_step(
+                batch_data, self.epoch, batch_idx, len(self.train_loader)
+            )
             returns["loss"].backward()
             self.optimizer.step()
 
@@ -215,30 +213,71 @@ class Trainer:
                     f"Loss {returns['loss']:.4f}"
                 )
 
+            loss_meter.update(returns["loss"].item())
             self.logger.update_batch(self.algorithm.get_info_dict())
 
-            if batch_idx == 10:
-                break
+        self.writer.add_scalar(
+            "train/losses/epoch/total_loss", loss_meter.get(), self.epoch
+        )
 
     @torch.no_grad()
-    def validate_epoch(self):
-        return {"val_loss": random.random()}, {"mIoU": random.random()}
+    def validate_epoch(self) -> dict[str, float | dict[str, float]]:
+        class_names: list[str] = self.config.data.available_datasets[
+            self.config.data.dataset_using
+        ].classnames
+        mIoU_meter = AverageMeter()
+        cIoU_meter = {name: AverageMeter() for name in ["background"] + class_names}
+        self.logger.warning(
+            f"Validation at epoch {self.epoch} with {len(self.val_loader)} batches of examples"
+        )
+        for batch_data in self.val_loader:
+            image = to(batch_data[1], self.dtype, self.device)
+            # [B, H, W]
+            ground_truth_mask = to(batch_data[2], self.dtype, self.device).squeeze(1)
+
+            # [B, H, W]
+            prediction_mask = self.algorithm.predict(image)
+
+            # intersection: [B, num_classes]
+            # union: [B, num_classes]
+            intersection, union, _ = fast_intersection_and_union(
+                prediction_mask,
+                ground_truth_mask,
+                len(class_names) + 1,
+            )
+
+            mIoU = intersection.sum(dim=0) / (union.sum(dim=0) + 1e-10)
+            for name, iou in zip(class_names, mIoU):
+                cIoU_meter[name].update(iou.item())
+            mIoU_meter.update(mIoU.mean().item())
+
+        metrics = {"mIoU": mIoU_meter.get()} | (
+            cIoU := {name: meter.get() for name, meter in cIoU_meter.items()}
+        )
+
+        for name, value in metrics.items():
+            self.logger.info(f"\t{name}: {value:.4f}")
+            self.writer.add_scalar(f"val/IoU/{name}", value, self.epoch)
+
+        return {"mIoU": mIoU_meter.get(), "class IoU": cIoU}
 
     def train(self):
         self.config.running_info["training_at"] = f"{datetime.now():%Y%m%d-%H:%M:%S}"
 
         with self.logger.training_context():
+            self.logger.success(
+                f"Training {self.algorithm.__class__.__name__} at {self.config.running_info['training_at']}"
+            )
             for epoch in range(self.epoch, self.config.train.epochs):
                 self.epoch = epoch
                 self.train_epoch()
-                val_losses, val_metrics = self.validate_epoch()
+                val_metrics = self.validate_epoch()
 
                 self.scheduler.step()
 
-                is_best = val_losses["val_loss"] < self.best_losses["val_loss"]
+                is_best = val_metrics["mIoU"] > self.best_metrics["mIoU"]
                 if is_best:
                     self.best_epoch = self.epoch
-                    self.best_losses |= val_metrics
                     self.best_metrics |= val_metrics
                 self.save_checkpoint(
                     self.log_dir / "checkpoints",
