@@ -175,7 +175,9 @@ class WeCLIP(WSSSAlgorithm):
             foreground_labels=get_label_texts(prompt, self.foreground_classes),
         )
 
-    def train_step(self, data: list[torch.Tensor], epoch: int, batch: int):
+    def train_step(
+        self, data: list[torch.Tensor], epoch: int, batch: int, num_batches: int
+    ):
         # images: [B, 3, H, W]
         (
             original_image,
@@ -232,6 +234,22 @@ class WeCLIP(WSSSAlgorithm):
             "seg_loss": segmentation_loss,
         }
 
+        self.writer.add_scalar(
+            "train/losses/batch/affinity_loss",
+            affinity_loss,
+            global_step=epoch * num_batches + batch,
+        )
+        self.writer.add_scalar(
+            "train/losses/batch/segmentation_loss",
+            segmentation_loss,
+            global_step=epoch * num_batches + batch,
+        )
+        self.writer.add_scalar(
+            "train/losses/batch/total_loss",
+            loss,
+            global_step=epoch * num_batches + batch,
+        )
+
         self.info_dict |= {
             "epoch": epoch,
             "batch": batch,
@@ -241,8 +259,11 @@ class WeCLIP(WSSSAlgorithm):
 
     @torch.no_grad()
     def predict(self, image: torch.Tensor) -> torch.Tensor:
-        _, prediction_mask, _ = self.model(image)
-        return _upsample(prediction_mask, self.model.clip.image_resolution)
+        # prediction_mask: [B, num_class, H, W], num_class 含背景
+        _, _, prediction_mask, _ = self.model(image)
+        return _upsample(prediction_mask, self.model.clip.image_resolution).argmax(
+            dim=1
+        )
 
     def get_info_dict(self):
         return self.info_dict
