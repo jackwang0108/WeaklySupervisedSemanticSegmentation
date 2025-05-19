@@ -10,10 +10,11 @@ clip.py 提供了CLIP模型的加载和预处理功能
 
 # Standard Library
 import os
-import hashlib
 import urllib
+import hashlib
 import warnings
 import urllib.request
+from typing import Optional
 from packaging import version
 
 # Third-Party Library
@@ -23,18 +24,16 @@ from torchvision.transforms import Compose
 
 # Torch Library
 import torch
+import torch.nn as nn
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
 
 # My Library
 from .model import build_model, CLIP
 from .simple_tokenizer import SimpleTokenizer as _Tokenizer
 
-try:
-    from torchvision.transforms import InterpolationMode
+from torchvision.transforms import InterpolationMode
 
-    BICUBIC = InterpolationMode.BICUBIC
-except ImportError:
-    BICUBIC = Image.BICUBIC
+BICUBIC = InterpolationMode.BICUBIC
 
 
 if version.parse(torch.__version__) < version.parse("1.7.1"):
@@ -133,7 +132,7 @@ def load(
     name: str,
     device: str | torch.device = "cuda" if torch.cuda.is_available() else "cpu",
     jit: bool = False,
-    download_root: str = None,
+    download_root: Optional[str] = None,
 ) -> tuple[CLIP, Compose]:
     """
     load 加载指定类别的CLIP模型
@@ -179,7 +178,9 @@ def load(
             state_dict = torch.load(opened_file, map_location="cpu")
 
     if not jit:
-        model = build_model(state_dict or model.state_dict()).to(device)
+        model = build_model(
+            state_dict if state_dict is not None else model.state_dict()
+        ).to(device)
         if str(device) == "cpu":
             model.float()
         return model, _transform(model.visual.input_resolution)
@@ -190,7 +191,7 @@ def load(
     )
     device_node = [
         n
-        for n in device_holder.graph.findAllNodes("prim::Constant")
+        for n in device_holder.graph.findAllNodes("prim::Constant")  # type: ignore
         if "Device" in repr(n)
     ][-1]
 

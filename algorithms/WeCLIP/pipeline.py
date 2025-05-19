@@ -44,14 +44,14 @@ def create_neighbor_mask(h: int, w: int, radius: int) -> torch.Tensor:
 
 def pseudo_label_to_affinity_label(
     pseudo_labels: torch.Tensor,
-    grid_size: tuple[int, int],
+    grid_size: tuple[int, int] | torch.Size,
     radius: int = 8,
     ignore_index: int = 255,
 ) -> torch.Tensor:
     """将GradCAM生成的伪标签转换为Affinity Label, 对应论文中9式"""
     # downsampled: [B, H, W] -> [B, 1, h, w]
     downsampled: torch.Tensor = F.interpolate(
-        pseudo_labels.unsqueeze(dim=1), size=grid_size, mode="nearest"
+        pseudo_labels.unsqueeze(dim=1).float(), size=grid_size, mode="nearest"
     )
 
     # 原文中 Affinity Label 描述的是如果是相同的类别, 则为1, 否则为0
@@ -67,11 +67,11 @@ def pseudo_label_to_affinity_label(
     invalid_mask = (flattened == ignore_index) | (flattened_t == ignore_index)
     affinity_label[invalid_mask | (attn_mask == 0)] = ignore_index
 
-    return affinity_label
+    return affinity_label.long()
 
 
 def _upsample(
-    segmentation_mask: torch.Tensor, target_size: int | tuple[int, int]
+    segmentation_mask: torch.Tensor, target_size: int | tuple[int, int] | torch.Size
 ) -> torch.Tensor:
     """
     WeCLIP中模型输出的Segmentation Mask的大小其实是ViT的Patch网格的形状, 与原图并不匹配, 所以需要进行上采样

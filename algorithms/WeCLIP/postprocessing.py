@@ -111,7 +111,7 @@ class PixelAdaptiveRefinement(nn.Module):
 
 
 def get_post_processor() -> (
-    Callable[[torch.Tensor, torch.Tensor, tuple[int, int]], torch.Tensor]
+    Callable[[torch.Tensor, torch.Tensor, tuple[int, int] | torch.Size], torch.Tensor]
 ):
     first_run = True
     processor = PixelAdaptiveRefinement(num_iter=20, dilations=[1, 2, 4, 8, 12, 24])
@@ -119,7 +119,7 @@ def get_post_processor() -> (
     def post_processor(
         cam: torch.Tensor,
         image: torch.Tensor,
-        target_size: int | tuple[int, int],
+        target_size: int | tuple[int, int] | torch.Size,
     ) -> torch.Tensor:
         """
         GradCAM结果只是激活图, 为了能够训练, 因此需要将GradCAM激活图转为伪标签

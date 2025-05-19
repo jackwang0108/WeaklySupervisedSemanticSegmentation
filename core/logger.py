@@ -36,8 +36,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from rich.layout import Layout
-from rich.abc import RichRenderable
-from rich.console import Console, ConsoleOptions, RenderResult
+from rich.console import Console, ConsoleOptions, RenderResult, RenderableType
 
 # Torch Library
 import torch
@@ -96,6 +95,7 @@ class RenderableConsole(Console):
     def __rich_console__(
         self, console: Console, options: ConsoleOptions
     ) -> RenderResult:
+        assert options.height is not None
         yield Text("\n").join(self._segments[-options.height :])
 
 
@@ -114,7 +114,7 @@ class RichuruLogger:
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
-        self.file_console = Console(file=(log_dir / "running.log").open(mode="a"))
+        self.file_console = Console(file=(self.log_dir / "running.log").open(mode="a"))
         self.terminal_console = Console(stderr=True)
 
         self._setup_layout()
@@ -143,7 +143,7 @@ class RichuruLogger:
     def sink(
         self,
         message: loguru.Message,
-        console: Optional[Console],
+        console: Console,
     ) -> None:
         """Sink function to handle log messages."""
         if "rich" in message.record["extra"]:
@@ -223,8 +223,8 @@ class RichuruLogger:
         return self.footer_table
 
     def _setup_info_panel(
-        self, rich_renderable: Optional[RichRenderable] = None
-    ) -> RichRenderable:
+        self, rich_renderable: Optional[RenderableType] = None
+    ) -> RenderableType:
         previous_renderable = self.info_panel.renderable
         if rich_renderable is not None:
             self.info_panel.renderable = rich_renderable
@@ -251,7 +251,7 @@ class RichuruLogger:
     def make_info_table(
         self,
         info_dict: dict[str, float],
-        num_rows: Optional[int] = 3,
+        num_rows: int = 3,
         info_per_row: Optional[int] = None,
     ) -> Table:
         table = Table.grid(expand=True)
@@ -286,7 +286,7 @@ class RichuruLogger:
 
     def export_html(self):
         self.main_console.save_html(
-            self.log_dir / "report.html",
+            str(self.log_dir / "report.html"),
         )
 
     @contextmanager
@@ -299,14 +299,14 @@ class RichuruLogger:
     def update_batch(
         self,
         info_dict: Optional[dict[str, float]] = None,
-        rich_renderable: Optional[RichRenderable] = None,
+        rich_renderable: Optional[RenderableType] = None,
     ) -> None:
         assert info_dict is not None or rich_renderable is not None
 
         if info_dict is not None and isinstance(info_dict, dict):
             self._setup_info_panel(self.make_info_table(info_dict))
         elif rich_renderable is not None and isinstance(
-            rich_renderable, RichRenderable
+            rich_renderable, RenderableType
         ):
             self._setup_info_panel(rich_renderable)
 
@@ -316,7 +316,7 @@ class RichuruLogger:
     def update_epoch(
         self,
         info_dict: Optional[dict[str, float]] = None,
-        rich_renderable: Optional[RichRenderable] = None,
+        rich_renderable: Optional[RenderableType] = None,
     ) -> None:
         assert info_dict is not None or rich_renderable is not None
 
@@ -330,38 +330,38 @@ class RichuruLogger:
             self.progress.update(self.batch_task, completed=0)
         self.progress.update(self.epoch_task, advance=1)
 
-    def info(self, message: str | RichRenderable):
-        if isinstance(message, RichRenderable):
+    def info(self, message: str | RenderableType):
+        if isinstance(message, RenderableType):
             self.logger.bind(rich=message).info(message)
         else:
             self.logger.opt(colors=True).info(message)
 
-    def warning(self, message: str | RichRenderable):
-        if isinstance(message, RichRenderable):
+    def warning(self, message: str | RenderableType):
+        if isinstance(message, RenderableType):
             self.logger.bind(rich=message).warning(message)
         else:
             self.logger.opt(colors=True).warning(message)
 
-    def error(self, message: str | RichRenderable):
-        if isinstance(message, RichRenderable):
+    def error(self, message: str | RenderableType):
+        if isinstance(message, RenderableType):
             self.logger.bind(rich=message).error(message)
         else:
             self.logger.opt(colors=True).error(message)
 
-    def success(self, message: str | RichRenderable):
-        if isinstance(message, RichRenderable):
+    def success(self, message: str | RenderableType):
+        if isinstance(message, RenderableType):
             self.logger.bind(rich=message).success(message)
         else:
             self.logger.opt(colors=True).success(message)
 
-    def debug(self, message: str | RichRenderable):
-        if isinstance(message, RichRenderable):
+    def debug(self, message: str | RenderableType):
+        if isinstance(message, RenderableType):
             self.logger.bind(rich=message).debug(message)
         else:
             self.logger.opt(colors=True).debug(message)
 
-    def critical(self, message: str | RichRenderable):
-        if isinstance(message, RichRenderable):
+    def critical(self, message: str | RenderableType):
+        if isinstance(message, RenderableType):
             self.logger.bind(rich=message).critical(message)
         else:
             self.logger.opt(colors=True).critical(message)
