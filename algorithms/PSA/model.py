@@ -19,6 +19,10 @@ import torch.nn as nn
 # My Library
 
 
+class AffinityNet(nn.Module):
+    pass
+
+
 class PSAModel(nn.Module):
     def __init__(self):
         super().__init__()

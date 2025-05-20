@@ -240,6 +240,11 @@ class CLIPClassifier(nn.Module):
         logits: torch.Tensor = self.classifier(image_feature)
         return logits.softmax(dim=-1)
 
+    def zero_grad(self):
+        for param in self.parameters():
+            if param.grad is not None:
+                param.grad.data.zero_()
+
 
 class CLIPOutputTarget:
     def __init__(self, category: int):
@@ -279,9 +284,9 @@ class WeCLIPModel(nn.Module):
         for param in self.clip.parameters():
             param.requires_grad = False
 
-        self.patch_size = [
-            self.clip.image_resolution // self.clip.vision_patch_size
-        ] * 2
+        self.grad_size = torch.Size(
+            [self.clip.image_resolution // self.clip.vision_patch_size] * 2
+        )
 
         self.feature_decoder = FeatureDecoder(
             num_heads=8,
@@ -311,23 +316,33 @@ class WeCLIPModel(nn.Module):
         )
 
     def reshape(self, x: torch.Tensor) -> torch.Tensor:
-        return x[1:, :, :].permute(1, 2, 0).reshape(x.shape[1], -1, *self.patch_size)
+        return x[1:, :, :].permute(1, 2, 0).reshape(x.shape[1], -1, *self.grad_size)
+
+    def parameters(self, recurse=True, all_params=False) -> list[torch.Tensor]:
+        """模型中能被训练的参数只有feature_decoder中的参数, 所以需要手动返回"""
+        if all_params:
+            return super().parameters(recurse)
+        return self.feature_decoder.parameters(recurse)
 
     def get_gradcams(self, image: torch.Tensor) -> torch.Tensor:
         # [B, num_classes - 1, h, w], -1 是因为GradCAM计算的时候不计算背景类的GradCAM
         # 具体来说是对背景类进行了拆分, 用背景类中的多个物体来表示背景类, 该方法源自 CLIP-ES Fig.3 下面的那段话
-        return torch.stack(
-            [
+        gradcams: torch.Tensor | list[torch.Tensor] = []
+        for i, _ in enumerate(self.foreground_labels):
+            gradcams.append(
                 torch.from_numpy(
                     self.gradcam(
-                        [image, *self.patch_size],
+                        [image, *self.grad_size],
                         [CLIPOutputTarget(category=i)],
                     )
                 )
-                for i, _ in enumerate(self.foreground_labels)
-            ],
-            dim=1,
-        ).to(image.device, image.dtype)
+            )
+            # GradCAM不会主动清除梯度, 因此需要手动清除
+            self.clip_classifier.zero_grad()
+
+        gradcams = torch.stack(gradcams, dim=1).to(image.device, image.dtype)
+        gradcams.requires_grad = False
+        return gradcams
 
     def forward(
         self, image: torch.Tensor
@@ -360,6 +375,7 @@ class WeCLIPModel(nn.Module):
     def device(self) -> torch.device:
         return next(self.parameters()).device
 
+    @torch.no_grad()
     def encode_image(
         self, image: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -375,7 +391,7 @@ class WeCLIPModel(nn.Module):
         patch_feature = patch_feature.permute(0, 1, 3, 2)
         # 把token还原为图像矩阵, 即Vision Transformer Patch化的反操作
         # [B, num_layer, token_dim, num_patches] -> [B, num_layer, token_dim, h, w]
-        feature_map = patch_feature.reshape(*patch_feature.shape[:3], *self.patch_size)
+        feature_map = patch_feature.reshape(*patch_feature.shape[:3], *self.grad_size)
         # [B, num_layer, token_dim, h, w] -> [B, num_layer, h, w, token_dim]
         feature_map = feature_map.permute(0, 1, 3, 4, 2)
 

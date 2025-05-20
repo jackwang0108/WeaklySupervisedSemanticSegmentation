@@ -59,7 +59,7 @@ data:
                 - "bridge"
 
 algorithm:
-    name: "WeCLIP"
+    name: "ADA"
     backbone: "ViT-B/16"
     feature_dim: 256
     in_channels: 3
@@ -76,8 +76,8 @@ algorithm:
     optimizer:
         name: "AdamW"
         params:
-            lr: 2e-3
-            weight_decay: 1e-3
+            lr: 6e-5
+            weight_decay: 0.01
 
     scheduler:
         name: null

@@ -145,7 +145,7 @@ def get_segmentation_loss(
     return (background_loss + foreground_loss) / 2
 
 
-@register_algorithm("WeCLIP", True)
+@register_algorithm("WeCLIP")
 class WeCLIP(WSSSAlgorithm):
     def __init__(self, config: DictConfig):
         super().__init__(config=config)
@@ -176,8 +176,12 @@ class WeCLIP(WSSSAlgorithm):
         )
 
     def train_step(
-        self, data: list[torch.Tensor], epoch: int, batch: int, num_batches: int
-    ):
+        self,
+        data: list[torch.Tensor],
+        epoch: int,
+        batch: int,
+        num_batches: int,
+    ) -> dict[str, torch.Tensor]:
         # images: [B, 3, H, W]
         (
             original_image,

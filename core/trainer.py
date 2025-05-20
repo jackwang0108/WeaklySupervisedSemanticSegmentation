@@ -208,7 +208,7 @@ class Trainer:
 
             if batch_idx % self.config.train.log_interval == 0:
                 self.logger.info(
-                    f"Epoch [{self.epoch:{len(str(self.epoch))}}] "
+                    f"Epoch [{self.epoch:{len(str(self.config.train.epochs))}}/{self.config.train.epochs}]   "
                     f"Batch [{batch_idx:{len(str(len(self.train_loader)))}}/{len(self.train_loader)}], "
                     f"Loss {returns['loss']:.4f}"
                 )

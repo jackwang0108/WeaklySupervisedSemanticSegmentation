@@ -21,6 +21,8 @@ import torch.nn.functional as F
 from .. import register_algorithm
 from ..base import WeaklySupervisedSemanticSegmentationAlgorithm as WSSSAlgorithm
 
+from .model import AFAModel
+
 
 @register_algorithm("AFA")
 class AFA(WSSSAlgorithm):
@@ -30,7 +32,7 @@ class AFA(WSSSAlgorithm):
 
         self.info_dict = {}
 
-    def build_model(self):
+    def build_model(self) -> AFAModel:
         return super().build_model()
 
     def train_step(

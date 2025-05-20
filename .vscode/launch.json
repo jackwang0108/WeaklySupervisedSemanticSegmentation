@@ -5,12 +5,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python 调试程序: 模块1",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "algorithms.WeCLIP.model"
-        },
-        {
             "name": "Python 调试程序: algorithm.算法.模块",
             "type": "debugpy",
             "request": "launch",
@@ -25,9 +19,10 @@
             "args": [
                 "-c",
                 "${workspaceFolder}/configs/${input:pickConfig}.yaml",
-                "train.dataloader.batch_size=2"
+                "train.epochs=1",
+                "train.dataloader.batch_size=2",
             ],
-            "justMyCode": false
+            "justMyCode": true
         },
         {
             "name": "Python 调试程序: config 模块",
