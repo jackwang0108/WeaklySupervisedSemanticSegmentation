@@ -19,6 +19,7 @@
         "classenames",
         "Ctrainval",
         "deaugment",
+        "deeplab",
         "deepseek",
         "diningtable",
         "downsampled",
