@@ -3,80 +3,35 @@ _defaults_:
 
 data:
     dataset_using: "voc"
-    available_datasets:
-        voc:
-            background:
-                - "ground"
-                - "land"
-                - "grass"
-                - "tree"
-                - "building"
-                - "wall"
-                - "sky"
-                - "lake"
-                - "water"
-                - "river"
-                - "sea"
-                - "railway"
-                - "railroad"
-                - "keyboard"
-                - "helmet"
-                - "cloud"
-                - "house"
-                - "mountain"
-                - "ocean"
-                - "road"
-                - "rock"
-                - "street"
-                - "valley"
-                - "bridge"
-                - "sign"
-        coco:
-            background:
-                - "ground"
-                - "land"
-                - "grass"
-                - "tree"
-                - "building"
-                - "wall"
-                - "sky"
-                - "lake"
-                - "water"
-                - "river"
-                - "sea"
-                - "railway"
-                - "railroad"
-                - "keyboard"
-                - "helmet"
-                - "cloud"
-                - "house"
-                - "mountain"
-                - "ocean"
-                - "road"
-                - "rock"
-                - "street"
-                - "valley"
-                - "bridge"
 
 algorithm:
     name: "PSA"
-    backbone: "ViT-B/16"
-    feature_dim: 256
-    in_channels: 3
-    out_channels: 512
-    num_classes: 21
+    # Multi-Label Classification网络
+    classification_backbone: "resnet34"
+    classification_pretrained: true
 
-    n0: 6
-    alpha: 2
-    lambda_affinity: 0.1
+    # AffinityNet 网络
+    affinity_weight_path: null
 
-    prompt: "a clean origami [CLS]."
+    # Segmentation 网络
+    segmentation_backbone: "deeplab"
+    segmentation_weight_path: null
+
+    alpha_weaken: 24
+    alpha_amplify: 4
+    alpha_default: 16
+
+    gamma: 5
+
+    beta: 8
+
+    t: 256
 
     # 优化器
     optimizer:
-        name: "AdamW"
+        name: "Adam"
         params:
-            lr: 6e-5
+            lr: 1e-3
             weight_decay: 0.01
 
     scheduler:
